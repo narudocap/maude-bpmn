@@ -37,6 +37,8 @@ to resize: | width=100
 ![delivery process with legend and probabilities](../figs/delivery-legend-probs.png | =100x100)
 -->
 
+### Sample experiments
+
 #### predictive-usage
 TBC = 5, LAT = 10, POP = 1000,
 clerk = [[1, 0], 5, [60, 90], 60],
@@ -47,24 +49,12 @@ drone = [[1, 4], 3, [60, 90], 30]
 
 available instances        |  usage
 :-------------------------:|:-------------------------:
-![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type2.png)
-
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type1.png" alt="delivery cars available instances" width="100" height="100">
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type2.png" alt="delivery cars usage" width="100" height="100">
-
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-clerk-type1.png" alt="delivery clerks available instances" width="50" height="50">
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-clerk-type2.png" alt="delivery clerks usage" width="50" height="50">
-
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-courier-type1.png" alt="delivery couriers available instances" width="whatever" height="whatever">
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-courier-type2.png" alt="delivery couriers usage" width="whatever" height="whatever">
-
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-drone-type1.png" alt="delivery drones available instances" width="whatever" height="whatever">
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-drone-type2.png" alt="delivery drones usage" width="whatever" height="whatever">
-
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-worker-type1.png" alt="delivery workers available instances" width="whatever" height="whatever">
-<img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-worker-type2.png" alt="delivery workers usage" width="whatever" height="whatever">
-
-<img src="url" alt="alt text" width="whatever" height="whatever">
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type2.png) |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type2.png) |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-clerk-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-clerk-type2.png) |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-courier-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-courier-type2.png) |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-drone-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-drone-type2.png) |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-worker-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-worker-type2.png" alt="delivery workers usage" width="whatever" height="whatever">) |
 
 #### usage
 TBC = 10, CI = 10, POP = 1000,
@@ -74,17 +64,15 @@ courier = [[1, 0], 3, [40, 80], 40],
 car = [[1, 0], 2, [40, 80], 20],
 drone = [[1, 0], 3, [40, 80], 30]
 
-![delivery cars available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-car-type1.png "available instances")
-![delivery cars available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-car-type2.png "available instances")
-
-![delivery clerks available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-clerk-type1.png "available instances")
-![delivery clerks available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-clerk-type2.png "available instances")
-
-![delivery couriers available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-courier-type1.png "available instances")
-![delivery couriers available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-courier-type2.png "available instances")
-
-![delivery drones available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-drone-type1.png "available instances")
-![delivery drones available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-drone-type2.png "available instances")
-
-![delivery workers available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-worker-type1.png "available instances")
-![delivery workers available instances](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-worker-type2.png "available instances")
+available instances        |  usage
+:-------------------------:|:-------------------------:
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-car-type1.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-car-type2.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-clerk-type1.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-clerk-type2.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-courier-type1.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-courier-type2.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-drone-type1.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-drone-type2.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-worker-type1.png "available instances") |
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-usage-10-10--1-1000-1-0-5-1-40-80--1--1-60-1-0-4-1-40-80--1--1-50-1-0-3-1-40-80--1--1-40-1-0-2-1-40-80--1--1-20-1-0-3-1-40-80--1--1-30-worker-type2.png "available instances") |
