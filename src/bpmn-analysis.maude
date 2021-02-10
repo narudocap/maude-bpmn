@@ -1,0 +1,139 @@
+---- Formal Modelling and Analysis of BPMN processes using Maude
+---- authors: Francisco Duran, Camilo Rocha, and Gwen Salaun
+----
+---- This file contains operations for the automated analysis of BPMN processes
+
+---- information related to sync times and task execution times are commented out.
+
+sload bpmn.maude
+
+mod APMAUDE is
+  inc BPMN-SEM .
+  pr CONVERSION .
+  pr MAP{Id, 2-Tuple{Nat, Float}} .
+  pr MAP{Id, Float} .
+
+  op COSTS : -> Map{Id, Float} .
+  op TIME-BETWEEN-CHECKS : -> Time .
+  op CHECK-INTERVAL : -> Time .
+  op RATE : -> StochasticExpression .
+  op POPULATION : -> Nat .
+  op RESOURCES : -> Map{Id, 4-Tuple{Nat, Nat, Time, Nat}} .
+
+  vars CId RId Id TId NId : Id .
+  vars PId SId WId Sup : Oid .
+  vars Atts Atts' Atts1 Atts2 Atts3 : AttributeSet .
+  vars T T' T'' T''' T1 T2 T3 AT : Time .
+  var  Tk : Token .
+  var  Tks : List{Token} .
+  var  Conf : Configuration .
+  var  Nodes : Set{Node} .
+  var  B : Bool .
+  vars F R S A Cost FT FT' FT'' ATtl : Float .
+  vars N W Min Max Ttl Ttl' Avl QSize : Nat .
+  vars TSs TSs' : Map{Id, Time} .
+  vars TTSs TTSs' : Map{Id, Map{Id, Time}} .
+  var  SE : StochasticExpression .
+  var  Rs : Set{Resource} .
+  var  NFs : Map{Id, 2-Tuple{Nat, Float}} .
+  vars FNs SeqTtl SeqAvl SeqQSize : List{2-Tuple{Float, Nat}} .
+  var  SeqUsage : List{2-Tuple{Float, Float}} .
+  vars ME : Map{Id, Set{EventInstance}} .
+  var  Evs : Set{EventInstance} .
+  var  Replicas : Bag{Replica} .
+  var  Str : String .
+  var  Ids : Set{Id} .
+  var  Costs : Map{Id, Float} .
+
+  op (average execution time : _
+      variance execution time : _
+      total cost : _
+----      average sync times : _
+----      average task times : _
+      resource usage : _
+      resource usage : _) :
+    Float Float Float
+----    Map{Id, Float}
+----    Map{Id, Float}
+    Map{Id, Float}
+    Set{Resource}
+    -> System
+    [format (no o o o d no o o o d no ----o o o d no o o o d no
+             o o d no o o d no o o d d)] .
+
+  op pretty-printing : -> Msg .
+  eq [pretty-printing] :
+     { pretty-printing
+       < SId : Simulation |
+           tokens : nil,
+           gtime : T,
+           process-tstamps : TSs',
+           size-process-tstamps : s N,
+           process-execs : TSs,
+           size-process-execs : s N,
+----         sync-times : TTSs,
+----         task-times : TTSs',
+           resources : Rs,
+          Atts' >
+       < WId : Workload | works : 0, Atts >
+       Conf }
+    = (average execution time : if T == 0 then 0.0 else avg(TSs) fi
+       variance execution time : if T == 0 then 0.0 else var(TSs, avg(TSs)) fi
+----       average sync times : map-avg(TTSs)
+----       average task times : map-avg(TTSs')
+       total cost : cost(Rs, COSTS, T)
+       resource usage : resources(Rs, T)  ---- usage percentage per replica
+       resource usage : cleanResources(Rs)) .
+
+  op avg : Map{Id, Time} -> Float .
+  op avg : Map{Id, Time} Nat Float -> Float .
+  eq avg(TSs) = avg(TSs, 0, 0.0) .
+  eq avg((Id |-> T, TSs), N, S) = avg(TSs, s N, S + float(T)) .
+  eq avg(empty, N, S) = S / float(N) .
+
+  op var : Map{Id, Time} Float -> Float .
+  op var : Map{Id, Time} Float Nat Float -> Float .
+  eq var(TSs, A) = var(TSs, A, 0, 0.0) .
+  eq var((Id |-> T, TSs), A, N, S)
+    = var(TSs, A, s N, (float(T) - A) * (float(T) - A)) .
+  eq var(empty, A, N, S) = S / float(N) .
+
+  op cost : Set{Resource} Map{Id, Float} Time -> Float .
+  op cost : Set{Resource} Map{Id, Float} Float Float -> Float .
+  op cost : List{2-Tuple{Float, Nat}} Float Float -> Float .
+  op cost : Float Nat List{2-Tuple{Float, Nat}} Float Float Float -> Float .
+
+  eq cost(Rs, Costs, T) = cost(Rs, Costs, float(T), 0.0) .
+
+  eq cost((resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs), (RId |-> Cost, Costs), FT, A)
+    = cost(Rs, Costs, FT, A + cost(SeqTtl, Cost, FT)) .
+  eq cost(empty, empty, FT, A) = A .
+
+  eq cost((FT, Ttl) SeqTtl, Cost, FT')
+    = cost(FT, Ttl, SeqTtl, Cost, FT', 0.0) .
+
+  eq cost(FT, Ttl, (FT', Ttl') SeqTtl, Cost, FT'', ATtl)
+    = cost(FT', Ttl', SeqTtl, Cost, FT'', ATtl + (FT' - FT) * float(Ttl)) .
+  eq cost(FT, Ttl, nil, Cost, FT', ATtl) = (ATtl + (FT' - FT) * float(Ttl)) * Cost .
+
+  op resources : Set{Resource} Time -> Map{Id, Float} .
+  eq resources((resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs), T'')
+    = (RId |-> if T'' == 0
+               then 0.0
+               else float((100 * ((T + used(Replicas, T'')) / Ttl + T')) / T'') ---- times 100 to get the percentage
+               fi),
+      resources(Rs, T'') .
+  eq resources(empty, T) = empty .
+
+  op cleanResources : Set{Resource} -> Set{Resource} .
+  eq cleanResources(
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs))
+    = resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'),
+      cleanResources(Rs) .
+  eq cleanResources(empty) = empty .
+
+  ---- time elapsed since last reset
+  op used : Bag{Replica} Time -> Time .
+  eq used((replica(TId, NId, T) ; Replicas), T') = (T' monus T) + used(Replicas, T') .
+  eq used(Replicas, T) = 0 [owise] .
+endm

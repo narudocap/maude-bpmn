@@ -1,0 +1,50 @@
+---- Formal Modelling and Analysis of BPMN processes using Maude
+---- authors: Francisco Duran, Camilo Rocha, and Gwen Salaun
+---- file: run.maude
+----
+---- This file contains operations for the automated analysis of BPMN processes
+
+sload ../../../src/bpmn-analysis.maude
+sload ../../../src/supervisor-usage.maude
+
+red in STRING : "recruitment.maude" .
+red in STRING : "ExperimentId(recruitment-usage-5-5--1-1000-1-100-10-1-40-70--1--1-90-1-27-2-1-40-70--1--1-50-1-2-5-1-40-70--1--1-70)" .
+sload ../recruitment.maude
+
+mod RUN is
+  inc BPMN-EX .
+  inc SUPERVISOR .
+
+  eq POPULATION = 1000 .
+  eq RATE = Exp(0.5) .                          ---- INTER-TOKEN ARRIVAL TIME
+  eq TIME-BETWEEN-CHECKS = 5 .                 ---- TIME-BETWEEN-CHECKS
+  eq CHECK-INTERVAL = 5 .                      ---- CHECK-INTERVAL
+  eq RESOURCES
+    = (id("hr") |-> (1,100,10,1),     ---- RANGES, ALLOC. TIMES & INITIAL TOTALS
+       id("assistant") |-> (1,27,2,1),
+       id("technicalstaff") |-> (1,2,5,1)) .
+  eq THRESHOLDS
+    = (id("hr") |-> (float(40), float(70)),   ---- THRESHOLDS
+       id("assistant") |-> (float(40), float(70)),
+       id("technicalstaff") |-> (float(40), float(70))) .
+  eq COSTS
+    = (id("hr") |-> float(90),               ---- COST PER TIME UNIT
+       id("assistant") |-> float(50),
+       id("technicalstaff") |-> float(70)) .
+
+  ---- init state
+  ops p s w c l : -> Oid .
+  op initState : -> Configuration .
+  eq initState
+    =  PROCESS(p)
+       SIMULATION(s, RESOURCES)
+       WORKLOAD(w, RATE, POPULATION)
+       COUNTER(c)
+       SUPERVISOR(l, TIME-BETWEEN-CHECKS, CHECK-INTERVAL, THRESHOLDS)
+       .
+endm
+
+set print attribute on .
+
+erew { pretty-printing initState } .
+q

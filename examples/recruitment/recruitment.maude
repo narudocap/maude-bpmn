@@ -1,0 +1,125 @@
+---- Formal Modelling and Analysis of BPMN using Maude
+---- authors: Francisco Duran, Gwen Salaun, and Camilo Rocha
+---- file: recruitment.maude
+----
+---- Example of process for finalizing a recruitment.
+---- This takes inspiration in the example presented in the foclasa'18 paper
+----  but ajusted to describe it using collaboration diagrams.
+
+mod BPMN-EX is
+  pr APMAUDE .
+
+  op fls : -> Set{Flow} .
+  op nds : -> Set{Node} .
+
+  eq fls
+    = (
+        flow(id("ef1"), Norm(1.0, 0.2)),
+        flow(id("ef2"), Norm(1.0, 0.2)),
+        flow(id("ef3"), Norm(1.0, 0.2)),
+        flow(id("ef4"), Norm(1.0, 0.2)),
+        flow(id("ef5"), Norm(1.0, 0.2)),
+        flow(id("ef6"), Norm(1.0, 0.2)),
+        flow(id("ef7"), Norm(1.0, 0.2)),
+        flow(id("ef8"), Norm(1.0, 0.2)),
+        flow(id("ef9"), Norm(1.0, 0.2)),
+        flow(id("ef10"), Norm(1.0, 0.2)),
+        flow(id("ef11"), Norm(1.0, 0.2)),
+        flow(id("ef12"), Norm(1.0, 0.2)),
+        flow(id("ef13"), Norm(1.0, 0.2)),
+        flow(id("ef14"), Norm(1.0, 0.2), message(id("mreject"), "reject")),
+        flow(id("ef15"), Norm(1.0, 0.2), message(id("maccept"), "accept")),
+        flow(id("ef16"), Norm(1.0, 0.2), message(id("macceptpartial"), "accept partial")),
+        --- flow(id("ef17"), Norm(1.0, 0.2)),
+        --- flow(id("ef18"), Norm(1.0, 0.2)),
+        --- flow(id("ef19"), Norm(1.0, 0.2)),
+        flow(id("ef20"), Norm(1.0, 0.2)),
+        flow(id("ef21"), Norm(1.0, 0.2)),
+        flow(id("ef22"), message(id("mhrinitiated"), "HR initiated"), id("hrf1")),
+
+        flow(id("hrf1"), Norm(1.0, 0.2)),
+        flow(id("hrf2"), Norm(1.0, 0.2)),
+        flow(id("hrf3"), Norm(1.0, 0.2)),
+        flow(id("hrf4"), Norm(1.0, 0.2)),
+        flow(id("hrf5"), Norm(1.0, 0.2)),
+        flow(id("hrf6"), Norm(1.0, 0.2)),
+        flow(id("hrf7"), Norm(1.0, 0.2)),
+        flow(id("hrf8"), Norm(1.0, 0.2), message(id("msubmit"), "submit")),
+        flow(id("hrf9"), Norm(1.0, 0.2)),
+        flow(id("hrf10"), Norm(1.0, 0.2)),
+        flow(id("hrf11"), Norm(1.0, 0.2)),
+        flow(id("hrf12"), Norm(1.0, 0.2)),
+        flow(id("hrf13"), Norm(1.0, 0.2)),
+        flow(id("hrf14"), Norm(1.0, 0.2)),
+        flow(id("hrf15"), Norm(1.0, 0.2)),
+        flow(id("hrf16"), Norm(1.0, 0.2)),
+        flow(id("hrf17"), Norm(1.0, 0.2)),
+        --- flow(id("hrf17"), 0),
+        --- flow(id("hrf18"), 0),
+        --- flow(id("hrf19"), 0),
+        --- flow(id("hrf20"), 0),
+        --- flow(id("hrf21"), 0),
+
+        --- flow(id("af1"), Norm(1.0, 0.2)),
+
+        --- flow(id("tsf1"), Norm(1.0, 0.2)),
+
+        --- flow(id("beforefinalflow"), Norm(1.0, 0.2)),
+        flow(id("finalflow"), Norm(1.0, 0.2))
+      ) .
+  eq nds
+    = (
+        merge(id("g1"), exclusive, (id("ef1"), id("ef14")), id("ef2")),
+        split(id("g2"), parallel, id("ef2"), (id("ef3"), id("ef4"), id("ef5"))),
+        split(id("g3"), exclusive, id("ef5"), ((id("ef8"), 0.2) (id("ef9"), 0.8))),
+        merge(id("g4"), exclusive, (id("ef9"), id("ef10")), id("ef11")),
+        merge(id("g5"), parallel, (id("ef6"), id("ef7"), id("ef11")), id("ef12")),
+
+        split(id("g6"), eventbased, id("ef13"), (id("ef14"), id("ef15"), id("ef16"))),
+        merge(id("g7"), eventbased, (id("ef15"), id("ef20")), id("ef21")),
+        split(id("g8"), exclusive, id("hrf2"), ((id("hrf3"), 0.2) (id("hrf4"), 0.3) (id("hrf5"), 0.5))),
+        merge(id("g9"), exclusive, (id("hrf7"), id("hrf9")), id("hrf10")),
+        split(id("g10"), parallel, id("hrf10"), (id("hrf11"), id("hrf12"), id("hrf13"))),
+
+        --- split(id("g11"), eventbased, id("hrf10"), (id("hrf14"), id("hrf15"))),
+        --- merge(id("g12"), eventbased, (id("hrf15"), id("hrf18")), id("hrf19")),
+        merge(id("g13"), parallel, (id("hrf14"), id("hrf15"), id("hrf16")), id("hrf17")),
+
+        --- these merges are used for having a unique end node
+        ---merge(id("g14"), exclusive, (id("hrf6"), id("hrf15")), id("beforefinalflow")),
+        merge(id("g15"), parallel, (id("hrf17"), id("ef21")), id("finalflow")),
+
+        --- Time unit used: HOURS.
+
+        --- CAUTION: we do not put any resource 'employee' in the 5 first tasks
+        ---  because employees correspond to the tokens in the initial workload
+        ---  AND these tasks can be achieved at the same time by the employee.
+
+        start(id("initial"), id("ef1")),
+
+        task(id("t1"), "fill in form", id("ef3"), id("ef6"), Unif(2.0, 3.0), empty, empty),
+        task(id("t2"), "medical checkup", id("ef4"), id("ef7"), Unif(24.0, 72.0), empty, empty),
+        task(id("t3"), "visa application", id("ef8"), id("ef10"), Norm(360.0, 180.0), empty, empty),
+        task(id("t4"), "submit doc", id("ef12"), id("ef13"), Norm(1.0, 0.5), empty, (id("mhrinitiated"))),
+        task(id("t5"), "submit additional doc", id("ef16"), id("ef20"), Unif(24.0, 48.0), empty, (id("msubmit"))),
+
+        task(id("t6"), "check doc", id("hrf1"), id("hrf2"), Norm(48.0, 12.0), (id("hr")), empty),
+        task(id("t7"), "reject", id("hrf3"), id("hrf6"), Unif(1.0, 0.5), (id("hr")), (id("mreject"))),
+        task(id("t8"), "accept", id("hrf4"), id("hrf7"), Unif(1.0, 0.5), (id("hr")), (id("maccept"))),
+        task(id("t9"), "accept partial", id("hrf5"), id("hrf8"), Unif(1.0, 0.5), (id("hr")), (id("macceptpartial"))),
+        task(id("t10"), "archive all docs", id("hrf8"), id("hrf9"), Norm(48.0, 12.0), (id("hr")), empty),
+        task(id("t11"), "anticipate wages", id("hrf11"), id("hrf14"), Norm(48.0, 12.0), (id("hr")), empty),
+
+        task(id("t12"), "prepare welcome kit", id("hrf12"), id("hrf15"), Unif(24.0, 48.0), (id("assistant")), empty),
+        task(id("t13"), "update personnel DB", id("hrf13"), id("hrf16"), Unif(0.5, 1.0), (id("technicalstaff")), empty),
+
+        end(id("final1"), id("hrf6")),
+        end(id("final2"), id("finalflow"))
+      ) .
+
+  var O : Oid .
+  op PROCESS : Oid -> Object .
+  eq PROCESS(O) = < O : Process | nodes : nds, flows : fls > .
+  eq initial = id("initial") .
+
+endm

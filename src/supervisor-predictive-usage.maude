@@ -1,0 +1,248 @@
+---- Formal Modelling and Analysis of BPMN processes using Maude
+---- authors: Francisco Duran, Camilo Rocha, and Gwen Salaun
+
+---- This file contains the specification of the supervisor of the
+---- predictive-usage-based strategy to dynamically provision resource instances. 
+
+
+mod SUPERVISOR is
+  inc APMAUDE .
+  pr MY-MAP{Id, 2-Tuple{Float, Float}} .
+  pr MAYBE{System} .
+
+  op THRESHOLDS : -> Map{Id, 2-Tuple{Float, Float}} .
+  op PREDICTION-SIZE : -> Nat .
+  op POPULATION : -> Nat .
+  op RATE : -> StochasticExpression .
+  ops w l : -> Oid .
+
+  vars OId CId HId PId SId WId Sup FH : Oid .
+  vars RId FId FId1 FId2 NId TId TId' : Id .
+  var  Nodes : Set{Node} .
+  var  Flows : Set{Flow} .
+  vars Rs Rs' Rs'' Rs1 Rs2 : Set{Resource} .
+  vars Atts Atts' Atts1 Atts2 Atts3 Atts4 Atts5 Atts6 Atts7 Atts8 : AttributeSet .
+  var  Conf : Configuration .
+  vars TaskName MD TEXT Str : String .
+  vars FIds Visited RIds SEI SEII SEIO : Set{Id} .
+  vars FIdL FIdL1 FIdL2 : List{Id} .
+  vars T T' T'' T''' T1 T2 T1' T2' T1'' T2'' T1''' T2''' TBC CI PS AT : Time .
+  var  GW : Gateway .
+  vars Tks Tks' Tks'' : List{Token} .
+  var  Tk : Token .
+  vars N N' N'' M QUL QLL Avl Avl1 Avl2 Ttl Ttl1 Ttl2 QSize QSize1 QSize2 Min Max A1 A2 : Nat .
+  vars FIdPs FIdPL1 FIdPL2 : List{2-Tuple{Id, Float}} .
+  vars P P' R F F' F'' FN FT LUpd LUpd1 LUpd2 LUsg LUsg1 LUsg2 Usage Usage1 Usage2 AvgUsage UUL ULL : Float .
+  vars TSs TSs' : Map{Id, Time} .
+  vars TTSs TTSs' TTSs1 TTSs2 TTSs3 TTSs4 : Map{Id, Map{Id, Time}} .
+  vars SE SE1 SE2 : StochasticExpression .
+  vars E E1 E2 : Event .
+  vars FNs FNs' SeqAvl SeqAvl1 SeqAvl2 SeqTtl SeqTtl1 SeqTtl2 SeqQSize SeqQSize1 SeqQSize2 : List{2-Tuple{Float, Nat}} .
+  vars SeqUsage SeqUsage1 SeqUsage2 : List{2-Tuple{Float, Float}} .
+  var  ME : Map{Id, Set{EventInstance}} .
+  var  Evs : Set{EventInstance} .
+  var  Thds : Map{Id, 2-Tuple{Float, Float}} .
+  vars Replicas Replicas1 Replicas2 : Bag{Replica} .
+
+  ---- class SupervisorPrediction |
+  ----       thresholds : Map{Id, Tuple{Float, Float}},        usage thresholds
+  ----       look-ahead-time : Time
+  ----       forked-state : Maybe{System},
+  ----       check-interval : Time .
+  ---- subclass SupervisorPrediction < Supervisor .
+  sort SupervisorPrediction .
+  op SupervisorPrediction : -> SupervisorPrediction .
+  subsort SupervisorPrediction < Supervisor .
+  op thresholds :_ : Map{Id, 2-Tuple{Float, Float}} -> Attribute [ctor] .
+  op check-interval :_ : Time -> Attribute [ctor] . ---- time lapse between resource checks
+  op look-ahead-time`:_ : Time -> Attribute [ctor] .
+  op forked-state`:_ : Maybe{System} -> Attribute [ctor] .
+
+  op sup : -> Oid .
+
+  ---- class Timer | remaining-time : Time .
+  sort Timer .
+  op Timer : -> Timer .
+  subsort Timer < Cid .
+  op remaining-time :_ : Time -> Attribute [ctor] .
+
+  eq mte(< OId : Timer | remaining-time : T > Conf)
+    = minimum(T, mte(Conf)) .
+  eq delta(< OId : Timer | remaining-time : T > Conf, T')
+    = < OId : Timer | remaining-time : (T monus T') > delta(Conf, T') .
+
+  ops v t : -> Oid .
+
+  op SUPERVISOR : Oid Time Time Map{Id, 2-Tuple{Float, Float}} Time -> Object .
+  eq SUPERVISOR(Sup, TBC, CI, Thds, PS )
+    = < Sup : SupervisorPrediction |
+          time-between-checks : TBC,
+          time-to-next-check : TBC,
+          check-interval : CI,
+          thresholds : Thds,
+          look-ahead-time : PS,
+          forked-state : null > .
+
+  crl [supervisor-initiate-prediction] :
+     < SId : Simulation | tokens : Tks, Atts1 >
+     < PId : Process | Atts2 >
+     < CId : Counter | Atts3 >
+     < WId : Workload | Atts4 >
+     < Sup : SupervisorPrediction |
+         time-to-next-check : 0,     ---- check is due
+         forked-state : null,
+         look-ahead-time : T,
+         Atts5 >
+  => < SId : Simulation | tokens : Tks, Atts1 >
+     < PId : Process | Atts2 >
+     < CId : Counter | Atts3 >
+     < WId : Workload | Atts4 >
+     < Sup : SupervisorPrediction |
+         time-to-next-check : 0,
+         forked-state :              ---- a copy of the state is used to predict
+           { < SId : Simulation | tokens : Tks, Atts1 >
+             < PId : Process | Atts2 >
+             < CId : Counter | Atts3 >
+             < WId : Workload | Atts4 >
+             < t : Timer | remaining-time : T > }, ---- prediction time
+         look-ahead-time : T,
+         Atts5 >
+  if Tks =/= nil
+  [print "*** prediction initiated"] .
+
+  rl [supervisor-prediction-completed] :
+      < SId : Simulation | resources : Rs, gtime : T, Atts1 >
+      < Sup : SupervisorPrediction |
+          time-between-checks : TBC,
+          time-to-next-check : 0,
+          check-interval : CI,
+          thresholds : Thds,
+          forked-state :
+            { < SId : Simulation | resources : Rs', gtime : T', Atts3 >
+              < t : Timer | remaining-time : 0 >
+              Conf },
+          Atts2 >
+   => < SId : Simulation |
+          resources : update(Rs, Rs', Thds, TBC, CI, T, T'),
+          gtime : T,
+          Atts1 >
+      < Sup : SupervisorPrediction |
+          time-between-checks : TBC,
+          time-to-next-check : TBC,
+          check-interval : CI,
+          thresholds : Thds,
+          forked-state : null,
+          Atts2 >
+   [print "*** prediction completed"] .
+
+  op update : Set{Resource} Set{Resource} Map{Id, 2-Tuple{Float, Float}} Time Time Time Time -> Set{Resource} .
+  ceq update(
+        (resource(RId, Min, Max, AT, Ttl1, SeqTtl1, Avl1, SeqAvl1, Replicas1, QSize1, SeqQSize1,
+                  SeqUsage1 (LUpd1, LUsg1),
+                  T1, T1'),
+         Rs1),
+        (resource(RId, Min, Max, AT, Ttl2, SeqTtl2, Avl2, SeqAvl2, Replicas2, QSize2, SeqQSize2,
+                  SeqUsage2 (LUpd2, LUsg2),
+                  T2, T2'),
+         Rs2),
+        ((RId |-> (ULL, UUL)), Thds),
+        TBC,
+        CI,
+        T1'', T2'')
+   = if (Max == 0 or Ttl2 < Max) and-then Usage2 > UUL ---- * AvgUsage
+     then ---- a new replica is allocated with some delay
+          ---- when the delay terminates, the number of replicas is updated and
+          ---- a usage value is added
+          resource(
+            RId, Min, Max, AT,
+            Ttl1, SeqTtl1,       ---- total number of resources
+            Avl1, SeqAvl1,       ---- number of available resources
+            (Replicas1 ; delayed(idle, AT)), ---- use state of each replica
+            QSize1, SeqQSize1,   ---- resource queue sizes
+            SeqUsage1 (LUpd1, LUsg1), ---- resource usages along time
+            T1,                 ---- time of use of all replicas in  last period
+            T1')                ---- accumulated usage per resource
+     else if (Avl1 > 1 and Ttl2 > Min) and-then Usage2 < ULL ---- * AvgUsage
+          then resource(RId, Min, Max, AT,
+                        Ttl1 - 1, SeqTtl1 (float(T1''), Ttl1 - 1),
+                        Avl1 - 1, SeqAvl1 (float(T1''), Avl1 - 1),
+                        rmIdle(reset(Replicas1, T1'')),
+                        QSize1, SeqQSize1,
+                        SeqUsage1 (LUpd1, LUsg1) (float(T1''), Usage1),
+                        0,
+                        T1''' / Ttl1 + T1')
+          else resource(RId, Min, Max, AT, Ttl1, SeqTtl1, Avl1, SeqAvl1,
+                        reset(Replicas1, T1''), QSize1, SeqQSize1,
+                        SeqUsage1 (LUpd1, LUsg1) (float(T1''), Usage1),
+                        0,
+                        T1''' / Ttl1 + T1')
+          fi
+     fi,
+     update(Rs1, Rs2, Thds, TBC, CI, T1'', T2'')
+   if T1''' := (T1 + used(Replicas1, T1'')) ---- time of use since the last check
+   /\ T2''' := (T2 + used(Replicas2, T2'')) ---- time of use including prediction
+   /\ Usage1 := if float(T1'') - LUpd1 <= 0.0001 ---- usage since last check
+                then LUsg1
+                else min(float(100 * T1''') / (float(Ttl1) * (float(T1'') - LUpd1)), 100.0)
+                fi
+   /\ Usage2 := if float(T2'') - LUpd2 <= 0.0001 ---- usage including prediction
+                then LUsg2
+                else min(float(100 * T2''') / (float(Ttl2) * (float(T2'') - LUpd2)), 100.0)
+                fi
+----   /\ AvgUsage := averageUsage(
+----                    SeqUsage1 (LUpd1, LUsg1) (float(T1''), Usage1),
+----                    Ttl1, Avl1,
+----                    T1'' monus CI)
+   .
+  eq update(empty, empty, Thds, TBC, CI, T1, T2) = empty .
+
+  ceq < SId : Simulation |
+        resources : (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl,
+                              (delayed(idle, 0) ; Replicas),
+                              QSize, SeqQSize,
+                              SeqUsage (LUpd, LUsg),
+                              T, T'),
+                     Rs),
+        gtime : T'',
+        Atts >
+  = < SId : Simulation |
+       resources : (resource(RId, Min, Max, AT,
+                             Ttl + 1, SeqTtl (float(T''), Ttl + 1),
+                             Avl + 1, SeqAvl (float(T''), Avl + 1),
+                             (idle ; reset(Replicas, T'')),
+                             QSize, SeqQSize,
+                             SeqUsage (LUpd, LUsg) (float(T''), Usage),
+                             0,
+                             T''' / Ttl + T'),
+                    Rs),
+       gtime : T'',
+       Atts >
+     if T''' := (T + used(Replicas, T''))
+     ---- usage for the time elapsed since the last check
+     /\ Usage := min(float(100 * T''') / (float(Ttl) * (float(T'') - LUpd)), 100.0) .
+
+  ---- averageUsage(SeqUsage, T) calculates the average usage of the usages dated later than T
+  ---- the returned average is calculated as the average of the usage values, when there
+  ---- may be intervals of different sizes
+  op averageUsage : List{2-Tuple{Float, Float}} Nat Nat Time -> Float .
+  op averageUsage : List{2-Tuple{Float, Float}} Float Float Float -> Float .
+  eq averageUsage(SeqUsage (F, F'), Ttl, Avl, T)
+   = if F <= float(T)
+     then 100.0 * float(Avl) / float(Ttl)
+     else averageUsage(SeqUsage, 1.0, F', float(T))
+     fi .
+  eq averageUsage(SeqUsage (F, F'), FN, F'', FT)
+   = if F <= FT
+     then F'' / FN
+     else averageUsage(SeqUsage, FN + 1.0, F' + F'', FT)
+     fi .
+  eq averageUsage(nil, FN, F, FT) = F / FN .
+
+  ---- resets the time of the replica to the begining of a new period
+  op reset : Bag{Replica} Time -> Bag{Replica} .
+  eq reset((replica(TId, NId, T) ; Replicas), T') = replica(TId, NId, T') ; reset(Replicas, T') .
+  eq reset(Replicas, T) = Replicas [owise] .
+
+  op rmIdle : NeBag{Replica} -> Bag{Replica} .
+  eq rmIdle((idle ; Replicas)) = Replicas .
+endm

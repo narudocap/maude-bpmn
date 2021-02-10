@@ -1,0 +1,50 @@
+bpmn-run-delivery-usage-10-25-1-0-5-2-70-80-60-1-0-4-2-70-80-50-1-0-3-2-70-80-40-1-0-2-2-70-80-20-1-0-3-2-70-80-30
+rewrites: 40611782 in 65297ms cpu (65865ms real) (621953 rewrites/second)
+average execution time : 7.6814081216791479e+1
+variance execution time : 2.1995372036995792e-1
+total cost : 2.4265497767774641e+5
+resource usage :
+    id("car") |-> 5.112738961655576e+1,
+    id("clerk") |-> 5.276990298522766e+1,
+    id("deliveryman") |-> 5.1727899226271752e+1,
+    id("drone") |-> 6.475354128209338e+1,
+    id("worker") |-> 5.9245934901178984e+1
+
+bpmn-run-delivery-predictive-usage-10-25-20-1-0-5-2-60-1-0-4-2-50-1-0-3-2-40-1-0-2-2-20-1-0-3-2-30.maude
+rewrites: 171253323 in 343923ms cpu (347032ms real) (497940 rewrites/second)
+result System:
+average execution time : 7.402882522528742e+1
+variance execution time : 1.2742231024392453e-1
+total cost : 1.022823690213636e+5
+resource usage :
+    id("car") |-> 8.0229408107972162,
+    id("clerk") |-> 1.7986417656959649e+1,
+    id("deliveryman") |-> 1.5940124611823355e+1,
+    id("drone") |-> 5.6347356751144694e+1,
+    id("worker") |-> 3.5439870458639469e+1
+
+bpmn-run-delivery-queues-10-25-1-0-5-2-3-6-60-1-0-4-2-3-6-50-1-0-3-2-3-6-40-1-0-2-2-2-8-20-1-0-3-2-2-8-30.maude
+rewrites: 51463404 in 85947ms cpu (86462ms real) (598776 rewrites/second)
+result System:
+average execution time : 9.1229762565186107e+1
+variance execution time : 8.5535882416273668e-1
+total cost : 3.407153040535262e+5
+resource usage :
+    id("car") |-> 7.9036886099777107e+1,
+    id("clerk") |-> 6.4435104187675023e+1,
+    id("deliveryman") |-> 7.4270678720342232e+1,
+    id("drone") |-> 8.1775551117838759e+1,
+    id("worker") |-> 7.6844425569180402e+1
+
+bpmn-run-delivery-usage-queues-10-25-1-0-5-2-70-80-3-6-60-1-0-4-2-70-80-3-6-50-1-0-3-2-70-80-3-6-40-1-0-2-2-70-80-2-8-20-1-0-3-2-70-80-2-8-30.maude
+rewrites: 47535449 in 82497ms cpu (83381ms real) (576201 rewrites/second)
+result System:
+average execution time : 8.713335237375189e+1
+variance execution time : 6.3252793055493006e-1
+total cost : 3.2834758812618192e+5
+resource usage :
+    id("car") |-> 7.8049901806205369e+1,
+    id("clerk") |-> 6.1374889928627105e+1,
+    id("deliveryman") |-> 7.3998388956833708e+1,
+    id("drone") |-> 7.9244038012198985e+1,
+    id("worker") |-> 7.4636713214727052e+1

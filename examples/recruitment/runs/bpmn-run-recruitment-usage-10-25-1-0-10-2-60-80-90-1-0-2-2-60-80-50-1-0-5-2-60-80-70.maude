@@ -1,0 +1,49 @@
+---- Formal Modelling and Analysis of BPMN processes using Maude
+---- authors: Francisco Duran, Camilo Rocha, and Gwen Salaun
+---- file: run.maude
+----
+---- This file contains operations for the automated analysis of BPMN processes
+
+sload ../../../src/bpmn-analysis.maude
+sload ../../../src/supervisor-usage.maude
+
+red in STRING : "recruitment.maude" .
+sload ../recruitment.maude --- delivery-by-drones process
+
+mod RUN is
+  inc BPMN-EX .
+  inc SUPERVISOR .
+
+  eq POPULATION = 1000 .
+  eq RATE = Exp(0.5) .                          ---- INTER-TOKEN ARRIVAL TIME
+  eq TIME-BETWEEN-CHECKS = 10 .                 ---- TIME-BETWEEN-CHECKS
+  eq CHECK-INTERVAL = 25 .                      ---- CHECK-INTERVAL
+  eq RESOURCES
+    = (id("hr") |-> (1,0,10,2),     ---- RANGES, ALLOC. TIMES & INITIAL TOTALS
+       id("assistant") |-> (1,0,2,2),
+       id("technicalstaff") |-> (1,0,5,2)) .
+  eq THRESHOLDS
+    = (id("hr") |-> (float(60),float(80)),   ---- THRESHOLDS
+       id("assistant") |-> (float(60),float(80)),
+       id("technicalstaff") |-> (float(60),float(80))) .
+  eq COSTS
+    = (id("hr") |-> float(90),               ---- COST PER TIME UNIT
+       id("assistant") |-> float(50),
+       id("technicalstaff") |-> float(70)) .
+
+  ---- init state
+  ops p s w c l : -> Oid .
+  op initState : -> Configuration .
+  eq initState
+    =  PROCESS(p)
+       SIMULATION(s, RESOURCES)
+       WORKLOAD(w, RATE, POPULATION)
+       COUNTER(c)
+       SUPERVISOR(l, TIME-BETWEEN-CHECKS, CHECK-INTERVAL, THRESHOLDS)
+       .
+endm
+
+set print attribute on .
+
+erew { pretty-printing initState } .
+q

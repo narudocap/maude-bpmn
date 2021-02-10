@@ -1,0 +1,205 @@
+---- Formal Modelling and Analysis of BPMN processes using Maude
+---- authors: Francisco Duran, Camilo Rocha, and Gwen Salaun
+
+---- This file contains the specification of the supervisor of the queues-based 
+---- strategy to dynamically provision resource instances.
+
+
+mod SUPERVISOR is
+  inc APMAUDE .
+  pr MY-MAP{Id, 2-Tuple{Nat, Nat}} .
+
+  op THRESHOLDS : -> Map{Id, 2-Tuple{Nat, Nat}} .
+
+  vars PId SId Sup : Oid .
+  vars CId RId FId FId1 FId2 NId Id Id' MId TId : Id .
+  var  Nodes : Set{Node} .
+  var  Flows : Set{Flow} .
+  vars Rs Rs' Rs1 Rs2 : Set{Resource} .
+  vars Atts Atts1 Atts2 : AttributeSet .
+  var  Conf : Configuration .
+  var  TaskName MD : String .
+  vars FIds Visited RIds SEI SEII SEIO : Set{Id} .
+  vars FIdL FIdL1 FIdL2 : List{Id} .
+  vars T T' T'' T''' T1 T2 TBC CI AT : Time .
+  var  GW : Gateway .
+  vars Tks Tks' Tks'' : List{Token} .
+  var  Tk : Token .
+  vars N N' N'' Avl Ttl QSize Min Max A1 A2 QUL QLL : Nat .
+  vars FIdPs FIdPL1 FIdPL2 : List{2-Tuple{Id, Float}} .
+  vars P P' R F F' F'' Usage LUpd LUsg : Float .
+  vars TSs TSs' : Map{Id, Time} .
+  vars TTSs TTSs' TTSs1 TTSs2 TTSs3 TTSs4 : Map{Id, Map{Id, Time}} .
+  vars SE SE1 SE2 : StochasticExpression .
+  vars E E1 E2 : Event .
+  vars FNs FNs' SeqAvl SeqTtl SeqQSize : List{2-Tuple{Float, Nat}} .
+  var  ME : Map{Id, Set{EventInstance}} .
+  var  Evs : Set{EventInstance} .
+  var  Thds : Map{Id, 2-Tuple{Nat, Nat}} .
+  var  Replicas : Bag{Replica} .
+  var  SeqUsage : List{2-Tuple{Float, Float}} .
+
+  ---- class SupervisorQueues | thresholds : Map{Id, 2-Tuple{Nat, Nat}} .
+  ---- subclass SupervisorQueues < Supervisor .
+  sort SupervisorQueues .
+  op SupervisorQueues : -> SupervisorQueues .
+  subsort SupervisorQueues < Supervisor .
+  op thresholds :_ : Map{Id, 2-Tuple{Nat, Nat}} -> Attribute [ctor] .
+
+  op SUPERVISOR : Oid Time Time Map{Id, 2-Tuple{Nat, Nat}} -> Object .
+  eq SUPERVISOR(SId, TBC, CI, Thds)
+    = < SId : SupervisorQueues | time-between-checks : TBC,
+                                 time-to-next-check : TBC,
+                                 check-interval : CI,
+                                 thresholds : Thds > .
+
+  crl [supervisor] :
+     < SId : Simulation | tokens : Tks, resources : Rs, gtime : T, Atts1 >
+     < Sup : SupervisorQueues | time-between-checks : TBC,
+                                time-to-next-check : 0,
+                                check-interval : CI,
+                                thresholds : Thds,
+                                Atts2 >
+  => < SId : Simulation |
+        tokens : Tks,
+        resources : update(Rs, Thds, TBC, CI, T),
+        gtime : T,
+        Atts1 >
+     < Sup : SupervisorQueues | time-between-checks : TBC,
+                                time-to-next-check : TBC,
+                                check-interval : CI,
+                                thresholds : Thds,
+                                Atts2 >
+  if Tks =/= nil .
+
+  op update : Set{Resource} Map{Id, 2-Tuple{Nat, Nat}} Time Time Time -> Set{Resource} .
+  ceq update(
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize,
+                 SeqUsage (LUpd, LUsg),
+                 T, T'),
+        Rs),
+       ((RId |-> (QLL, QUL)), Thds),
+       TBC,
+       CI,
+       T'')
+    = if (Max == 0 or Ttl < Max) ---- Ttl may be increased
+          and-then
+          inRange(SeqQSize, QLL, QUL, float(T'' monus CI)) == over
+      then resource(RId, Min, Max, AT,
+                    Ttl, SeqTtl,
+                    Avl, SeqAvl,
+                    (Replicas ; delayed(idle, AT)),
+                    QSize, SeqQSize,
+                    SeqUsage (LUpd, LUsg),
+                    T,
+                    T')
+      else if (Avl > 1 and Ttl > Min) ---- Ttl may be decreased
+               and-then
+               inRange(SeqQSize, QLL, QUL, float(T'' monus CI)) == under
+           then resource(RId, Min, Max, AT,
+                         Ttl - 1, SeqTtl (float(T''), Ttl - 1),
+                         Avl - 1, SeqAvl (float(T''), Avl - 1),
+                         rmIdle(reset(Replicas, T'')),
+                         QSize, SeqQSize,
+                         SeqUsage (LUpd, LUsg) (float(T''), Usage),
+                         0,
+                         T''' / Ttl + T')
+           else resource(RId, Min, Max, AT,
+                         Ttl, SeqTtl (float(T''), Ttl),
+                         Avl, SeqAvl (float(T''), Avl),
+                         reset(Replicas, T''), QSize, SeqQSize,
+                         SeqUsage (LUpd, LUsg) (float(T''), Usage),
+                         0,
+                         T''' / Ttl + T')
+           fi
+      fi,
+      update(Rs, Thds, TBC, CI, T'')
+    if T''' := (T + used(Replicas, T''))
+    /\ Usage := if float(T'') - LUpd <= 0.0001
+                then LUsg
+                else min(float(100 * T''') / (float(Ttl) * (float(T'') - LUpd)), 100.0)
+                fi .
+  eq update(empty, Thds, TBC, CI, T) = empty .
+
+  ceq < SId : Simulation |
+          resources : (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl,
+                                (delayed(idle, 0) ; Replicas),
+                                QSize, SeqQSize,
+                                SeqUsage (LUpd, LUsg),
+                                T, T'),
+                       Rs),
+          gtime : T'',
+          Atts >
+    = < SId : Simulation |
+         resources : (resource(RId, Min, Max, AT,
+                               Ttl + 1, SeqTtl (float(T''), Ttl + 1),
+                               Avl + 1, SeqAvl (float(T''), Avl + 1),
+                               (idle ; reset(Replicas, T'')),
+                               QSize, SeqQSize,
+                               SeqUsage (LUpd, LUsg) (float(T''), Usage),
+                               0,
+                               T''' / Ttl + T'),
+                      Rs),
+         gtime : T'',
+         Atts >
+       if T''' := (T + used(Replicas, T''))
+       /\ Usage := min(float(100 * T''') / (float(Ttl) * (float(T'') - LUpd)), 100.0) .
+
+  sort Range .
+  ops over under inside : -> Range .
+  ---- a resource queue-size sequence is evaluated as "over" if over the QUL
+  ---- for CI time; it is evaluated as "under" if under the QLL
+  ---- for CI time; otherwise it is evaluated as "inside"
+
+  op inRange :
+       List{2-Tuple{Float, Nat}} ---- queue sizes along time
+       Nat                       ---- queues' lower threshold level
+       Nat                       ---- queues' upper threshold level
+       Float                     ---- time up to which looking back
+       -> Range .
+  ops over under :
+       List{2-Tuple{Float, Nat}} ---- queue sizes along time
+       Nat                       ---- queues' upper/lower threshold level
+       Float                     ---- time up to which looking back
+       -> Bool .
+
+  eq inRange(SeqQSize (F, N), Min, Max, F')
+    = if F >= F'
+      then if N > Max
+           then if over(SeqQSize, Max, F') then over else inside fi
+           else if N < Min
+                then if under(SeqQSize, Min, F') then under else inside fi
+                else inside
+                fi
+           fi
+      else inside
+      fi .
+  eq inRange(nil, Min, Max, F) = inside .
+
+  eq over(SeqQSize (F, N), Max, F')
+    = if F >= F'
+      then N > Max and-then over(SeqQSize, Max, F')
+      else true
+      fi .
+  eq over(nil, Max, F) = false .
+
+  eq under(SeqQSize (F, N), Min, F')
+    = if F >= F'
+      then N < Min and-then under(SeqQSize, Min, F')
+      else true
+      fi .
+  eq under(nil, Min, F) = false .
+
+  ---- resets the time of the replica to the begining of a new period
+  op reset : Bag{Replica} Time -> Bag{Replica} .
+  eq reset((replica(TId, NId, T) ; Replicas), T') = replica(TId, NId, T') ; reset(Replicas, T') .
+  eq reset(Replicas, T) = Replicas [owise] .
+
+  ---- time elapsed since last reset
+  op used : Bag{Replica} Time -> Time .
+  eq used((replica(TId, NId, T) ; Replicas), T') = (T' monus T) + used(Replicas, T') .
+  eq used(Replicas, T) = 0 [owise] .
+
+  op rmIdle : NeBag{Replica} -> Bag{Replica} .
+  eq rmIdle((idle ; Replicas)) = Replicas .
+endm

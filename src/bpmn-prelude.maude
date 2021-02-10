@@ -1,0 +1,197 @@
+---- Formal Modelling and Analysis of BPMN using Maude
+---- authors: Francisco Duran, Gwen Salaun, and Camilo Rocha
+---- file: bpmn.maude
+----
+---- This file contains the definitions of basic structures, like tuples and bags,
+---- redefinitions of modules in Maude's prelude (MAP, CONFIGURATION, ...) and
+---- some basic functionality related to random number geeration and stochastic
+---- expressions.
+
+--- 2 tuples -------------------------------------------------------------------
+fmod 2-TUPLE{X :: TRIV, Y :: TRIV} is
+  sort Tuple{X, Y} .
+  op ((_,_)) : X$Elt Y$Elt -> Tuple{X, Y} .
+  op p1_ : Tuple{X, Y} -> X$Elt .
+  op p2_ : Tuple{X, Y} -> Y$Elt .
+  eq p1(A:X$Elt, B:Y$Elt) = A:X$Elt .
+  eq p2(A:X$Elt, B:Y$Elt) = B:Y$Elt .
+endfm
+
+view 2-Tuple{X :: TRIV, Y :: TRIV} from TRIV to 2-TUPLE{X,Y} is
+  sort Elt to Tuple{X, Y} .
+endv
+
+--- 4 tuples -------------------------------------------------------------------
+fmod 4-TUPLE{W :: TRIV, X :: TRIV, Y :: TRIV, Z :: TRIV} is
+  sort Tuple{W, X, Y, Z} .
+  op ((_,_,_,_)) : W$Elt X$Elt Y$Elt Z$Elt -> Tuple{W, X, Y, Z} .
+  op p1_ : Tuple{W, X, Y, Z} -> W$Elt .
+  op p2_ : Tuple{W, X, Y, Z} -> X$Elt .
+  op p3_ : Tuple{W, X, Y, Z} -> Y$Elt .
+  op p4_ : Tuple{W, X, Y, Z} -> Z$Elt .
+  eq p1(A:W$Elt, B:X$Elt, C:Y$Elt, D:Z$Elt) = A:W$Elt .
+  eq p2(A:W$Elt, B:X$Elt, C:Y$Elt, D:Z$Elt) = B:X$Elt .
+  eq p3(A:W$Elt, B:X$Elt, C:Y$Elt, D:Z$Elt) = C:Y$Elt .
+  eq p4(A:W$Elt, B:X$Elt, C:Y$Elt, D:Z$Elt) = D:Z$Elt .
+endfm
+
+view 4-Tuple{W :: TRIV, X :: TRIV, Y :: TRIV, Z :: TRIV} from TRIV to 4-TUPLE{W,X,Y,Z} is
+  sort Elt to Tuple{W,X,Y,Z} .
+endv
+
+--- Bags -----------------------------------------------------------------------
+fmod BAG{X :: TRIV} is
+  protecting EXT-BOOL .
+  protecting NAT .
+  sorts NeBag{X} Bag{X} .
+  subsort X$Elt < NeBag{X} < Bag{X} .
+
+  op none : -> Bag{X} [ctor] .
+  op _;_ : Bag{X} Bag{X} -> Bag{X} [ctor assoc comm id: none prec 121 format (d r os d)] .
+  op _;_ : NeBag{X} Bag{X} -> NeBag{X} [ctor ditto] .
+endfm
+
+--- Maps -----------------------------------------------------------------------
+fmod MY-MAP{X :: TRIV, Y :: TRIV} is
+  protecting MAP{X, Y} .
+  pr NAT .
+
+  var  D : X$Elt .
+  var  R : Y$Elt .
+  var  M : Map{X,Y} .
+  var  N : Nat .
+
+  op remove : X$Elt Map{X,Y} -> Map{X,Y} .
+  eq remove(D, (M, D |-> R))
+    = remove(D, M) .
+  eq remove(D, M) = M [owise] .
+
+  op size : Map{X,Y} -> Nat .
+  op $size : Map{X,Y} Nat -> Nat .
+  eq size(M) = $size(M, 0) .
+  eq $size((M, D |-> R), N)
+    = if $hasMapping(M, D)
+      then $size(remove(D, M), N)
+      else $size(M, s N)
+      fi .
+  eq $size(empty, N) = N .
+endfm
+
+set show advisories off .
+view Map{X :: TRIV, Y :: TRIV} from TRIV to MY-MAP{X, Y} is
+  sort Elt to Map{X, Y} .
+endv
+set show advisories on .
+
+--- Maybe ----------------------------------------------------------------------
+fmod MAYBE{X :: TRIV} is
+  sort Maybe{X} .
+  subsort X$Elt < Maybe{X} .
+  op null : -> Maybe{X} [ctor] .
+endfm
+
+--- Configuration --------------------------------------------------------------
+set show advisories off .
+mod CONFIGURATION is
+  sorts Attribute AttributeSet .
+  subsort Attribute < AttributeSet .
+  op none : -> AttributeSet  [ctor] .
+  op _,_ : AttributeSet AttributeSet -> AttributeSet [ctor assoc comm id: none format (d d ni d)] .
+
+  sorts Oid Cid Object Msg Portal Configuration .
+  subsort Object Msg Portal < Configuration .
+  op <_:_|_> : Oid Cid AttributeSet -> Object [ctor object format (d d d d d n++i -- d)] .
+  op none : -> Configuration [ctor] .
+  op __ : Configuration Configuration -> Configuration [ctor config assoc comm id: none format (d n d)] .
+  op <> : -> Portal [ctor] .
+endm
+set show advisories on .
+
+view Configuration from TRIV to CONFIGURATION is
+  sort Elt to Configuration .
+endv
+
+--- Sampler --------------------------------------------------------------------
+mod SAMPLER is
+  pr RANDOM .
+  pr COUNTER .
+  pr CONVERSION .
+
+  op sampleBerWithP : Float -> Bool .
+  op sampleUniWithInt : Nat -> Nat .
+  op genRandom : Float Float -> [Float] .
+  var n s N : Nat .
+
+  op rand : Nat -> Float .
+  eq [rnd] : rand(N) = float(random(N) / 4294967296) .
+
+  op rand : -> [Float] .
+  rl [rnd] : rand => float(random(counter) / 4294967296) .
+
+  op rrand : -> [Rat] .
+  rl [rrnd] : rrand => random(counter) / 4294967296 .
+
+  var R R1 Min Max : Float .
+
+  eq sampleBerWithP(R) = if rand < R then true else false fi .
+  eq sampleUniWithInt(n) = floor(rrand * n) .
+  eq genRandom(Min, Max) = rand * (Max - Min) + Min .
+endm
+
+---- Stochastic Expressions ----------------------------------------------------
+fmod STOCHASTIC-EXPRESSION is
+  pr MGDISTRIBUTIONS .
+  pr POSRAT-TIME-DOMAIN-WITH-INF .
+  pr 2-TUPLE{Time, Int} * (op `(_`,_`) to `[_`,_`]).
+
+  sort StochasticExpression .
+  subsort Time < StochasticExpression .
+
+  vars F L M SG SH SC ND DD P LB UB : Float .
+     ---- L: lambda, M: mu, SG: sigma [Varianze = sigma^2]
+     ---- SH: shape, SC: scale NN:numerator degree
+  	 ---- DD: denominator degree
+  	 ---- LB: lower bound, UB: upper bound
+  vars S LI MI SGI SHI SCI NDI DDI PI LBI UBI : Int .
+     ---- S: seed, LI: lambda-integer, MI: mu-integer
+  	 ---- SGI: sigma-integer, SHI: shape-integer
+  	 ---- SCI: scale-integer --- NDI: numerator degree integer
+  	 ---- DDI: denominator degree integer
+  	 ---- LBI: lower bound integer, upper bound integer
+  vars LPR MPR SGPR SHPR SCPR NDPR DDPR PPR LBPR UBPR : PosRat .
+     ---- LPR: lambda-posrat MPR: mu-posrat
+  	 ---- SGPR: sigma-posrat SHPR: shape-posrat SCPR: scale-posrat
+  	 ---- NDPR: numerator degree posrat DDPR: denominator degree posrat
+  	 ---- LBPR: lower bound PosRat UBPR: upper bound PosRat
+  vars T T' : Time .
+
+  ---- NORMAL/GAUSS DISTRIBUTION
+  ---- standard normal = norm(0,1) = sqrt(-2ln(rand(0,1)))*cos(2pi*rand(0,1))
+  ---- norm(M,SG) =  SG*norm(0,1) + M
+  op Norm : -> StochasticExpression .
+  op Norm : Float Float -> StochasticExpression .
+  eq Norm = Norm(0.0, 1.0) .
+
+  ---- EXPONENTIAL DISTRIBUTION
+  ---- Mean = 1/L: this is the parameter as argument
+  ---- exp(L) = (ln(1000) - ln(rand(1000))) / L
+  op Exp : Float -> StochasticExpression .
+
+  ---- UNIFORM DISTRIBUTION
+  ---- A uniform distribution is commonly used if a random variable is bounded
+  ---- and no further information is available
+  ---- U(LB, UB) : LB: lower bound, UB: upper bound
+  op Unif : Float Float -> StochasticExpression .
+
+  op eval : StochasticExpression Int -> Tuple{Time, Int} . ---- Continuous time (Rat)
+  eq eval(Norm(M, SG), S)
+    = [ if normDistr(M, SG, S) >= 0.0 then rat(normDistr(M, SG, S)) else 0 fi,
+        s S ] .
+  eq eval(Exp(L), S)
+    = [ if expDistr(L, S) >= 0.0 then rat(expDistr(L, S)) else 0 fi,
+        s S ] .
+  eq eval(Unif(LB, UB), S)
+    = [ if unifDistr(LB, UB, S) > 0.0 then rat(unifDistr(LB, UB, S)) else 0 fi,
+        s S ] .
+  eq eval(T, S) = [ T, S ] .
+endfm

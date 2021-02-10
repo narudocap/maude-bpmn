@@ -1,0 +1,102 @@
+---- Formal Modelling and Analysis of BPMN using Maude
+---- authors: Francisco Duran, Gwen Salaun, and Camilo Rocha
+----
+---- Example of goods / products order and delivery by drones
+
+mod BPMN-EX is
+  pr APMAUDE .
+
+  op fls : -> Set{Flow} .
+  op nds : -> Set{Node} .
+
+  eq fls
+    = (
+        flow(id("f001"), Norm(1.0, 0.2)),
+        flow(id("f002"), Norm(1.0, 0.2)),
+        flow(id("f003"), Norm(1.0, 0.2)),
+        flow(id("f004"), Norm(1.0, 0.2)),
+        flow(id("f005"), Norm(1.0, 0.2)),
+        flow(id("f006"), Norm(1.0, 0.2)),
+        flow(id("f007"), Norm(1.0, 0.2)),
+        flow(id("f008"), Norm(1.0, 0.2)),
+        flow(id("f009"), Norm(1.0, 0.2), message(id("order confirmed"), "order confirmed")),
+        flow(id("f010"), Norm(1.0, 0.2), message(id("order canceled"), "order canceled")),
+        flow(id("f011"), Norm(1.0, 0.2), timer(id("timeout"), 60)),
+        flow(id("f012"), Norm(1.0, 0.2), message(id("parcel delivered"), "parcel delivered")),
+        flow(id("f013"), Norm(1.0, 0.2)),
+        flow(id("f014"), Norm(1.0, 0.2)),
+        flow(id("f015"), Norm(1.0, 0.2)),
+
+        flow(id("af001"), message(id("order initiated"), "order initiated"), id("f016")),
+        flow(id("f016"), Norm(1.0, 0.2)),
+
+        flow(id("f017"), Norm(1.0, 0.2)),
+        flow(id("f018"), Norm(1.0, 0.2)),
+        flow(id("f019"), Norm(1.0, 0.2)),
+        flow(id("f020"), Norm(1.0, 0.2)),
+        flow(id("f021"), Norm(1.0, 0.2)),
+        flow(id("f022"), Norm(1.0, 0.2), message(id("payment received"), "payment received")),
+        flow(id("f023"), Norm(1.0, 0.2)),
+        flow(id("f024"), Norm(1.0, 0.2)),
+        flow(id("f025"), Norm(1.0, 0.2)),
+        flow(id("f026"), Norm(1.0, 0.2)),
+        flow(id("f027"), Norm(1.0, 0.2)),
+        flow(id("f028"), Norm(1.0, 0.2)),
+        flow(id("f029"), Norm(1.0, 0.2)),
+        flow(id("f030"), Norm(1.0, 0.2)),
+        flow(id("f031"), Norm(1.0, 0.2)),
+        flow(id("af002"), 0),
+        flow(id("af003"), 0),
+        flow(id("af004"), 0)
+      ) .
+
+  eq nds
+    = (
+        merge(id("n003"), exclusive, (id("f002"), id("f005")), id("f003")),
+        split(id("n005"), exclusive, id("f004"), ((id("f005"), 0.6) (id("f006"), 0.2) (id("f007"), 0.2))),
+
+        split(id("n008"), eventbased, id("f008"), (id("f009"), id("f010"), id("f011"))),
+        merge(id("n010"), eventbased, (id("f010"), id("f011")), id("f013")),
+        merge(id("n012"), eventbased, (id("f012"), id("f014")), id("f015")),
+
+        split(id("n017"), exclusive, id("f017"),((id("f018"), 0.1) (id("f019"), 0.9))),
+        split(id("n021"), parallel, id("f021"), (id("f022"), id("f023"))),
+        merge(id("n022"), parallel, (id("f024"), id("f025")), id("f026")),
+
+        split(id("n023"), exclusive, id("f026"),((id("f027"), 0.4) (id("f028"), 0.6))),
+        merge(id("n026"), exclusive, (id("f029"), id("f030")), id("f031")),
+
+        --- these three merge are used for having a unique end node
+        merge(id("an001"), exclusive, (id("f020"), id("f031")), id("af002")),
+        merge(id("an002"), parallel, (id("f015"), id("af002")), id("af003")),
+        merge(id("an003"), exclusive, (id("f007"), id("af003")), id("af004")),
+
+        start(id("n001"), id("f001")),
+
+        task(id("n002"), "Sign in", id("f001"), id("f002"), Norm(1.0, 0.5), empty, empty),
+
+        task(id("n004"), "Search products", id("f003"), id("f004"), Unif(3.0, 30.0), empty, empty),
+        task(id("n007"), "Make an order", id("f006"), id("f008"), Norm(3.0, 2.0), empty, id("order initiated")),
+        task(id("n009"), "Pay for order", id("f009"), id("f012"), Norm(3.0, 2.0), empty, id("payment received")),
+        task(id("n011"), "Fill in feedback form", id("f013"), id("f014"), Unif(5.0, 10.0), empty, empty),
+
+        task(id("n014"), "Check availability", id("f016"), id("f017"), Norm(1.0, 0.1), id("clerk"), empty),
+        task(id("n016"), "Cancel order", id("f018"), id("f020"), Norm(2.0, 1.0), id("clerk"), id("order canceled")),
+        task(id("n017"), "Confirm order", id("f019"), id("f021"), Norm(2.0, 1.0), id("clerk"), id("order confirmed")),
+        task(id("n020"), "Payment validation", id("f022"), id("f024"), Norm(1.0, 1.0), empty, empty),
+
+        task(id("n021"), "Prepare parcel", id("f023"), id("f025"), Norm(5.0, 4.0), id("worker"), empty),
+        task(id("n027"), "Deliver by car", id("f027"), id("f029"), Unif(5.0, 15.0), (id("car"), id("courier")), id("parcel delivered")),
+        task(id("n028"), "Deliver by drone", id("f028"), id("f030"), Unif(10.0, 30.0), id("drone"), id("parcel delivered")),
+
+---        end(final, id("f006")),
+---        end(final, id("f015")),
+---        end(final, id("f031")),
+        end(id("an004"), id("af004"))
+      ) .
+
+  var O : Oid .
+  op PROCESS : Oid -> Object .
+  eq PROCESS(O) = < O : Process | nodes : nds, flows : fls > .
+  eq initial = id("n001") .
+endm

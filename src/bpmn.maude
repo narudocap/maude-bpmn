@@ -1,0 +1,1983 @@
+---- Formal Modelling and Analysis of BPMN using Maude
+---- authors: Francisco Duran, Gwen Salaun, and Camilo Rocha
+---- file: bpmn.maude
+----
+---- This file contains the definitions for the representation of the BPMN
+----  process and the rules describing the BPMN behavioral semantics.
+
+---- Exclusive split with probabilities
+----   - each of the branches has a probability
+----   - the sum of the probabilities of an exclusive branching must sum 1
+---- Inclusive split with probabilities
+----   - each of the branches has a probability
+----   - the sum of the probabilities doesn't need to sum 1, the probability
+----     of a branch indicates the probability of entering that branch, we may
+----     be entering several branches, at least one
+---- unquantified non-determinism free: tokens are kept in a list, only the
+---- first token in such a list is used, unless it goes to a merge, in which
+---- case, if all the required tokens are ready all of them are taken at once,
+---- or the ready tokens for the merge are shifted, moving forward other tokens
+
+sload mgDistributions.maude
+sload my-real-time-maude.maude
+sload bpmn-prelude.maude
+
+---- Identifiers ---------------------------------------------------------------
+fmod ID is
+  pr STRING .
+  sorts Id .
+  op id : String -> Id .   ---- ids are always of the form id("...")
+  op re-enter : Id -> Id . ---- node ids, marks token for 2-stage tasks
+endfm
+
+view Id from TRIV to ID is
+  sort Elt to Id .
+endv
+
+---- Gateways ------------------------------------------------------------------
+fmod GATEWAY is
+  sort Gateway .
+  op exclusive : -> Gateway [ctor] .
+  op inclusive : -> Gateway [ctor] .    ---- inclusive split 1.0 & 2.0 and merge 1.0
+  op inclusive2.0 : -> Gateway [ctor] . ---- inclusive merge 2.0
+  op parallel : -> Gateway [ctor] .
+  op eventbased : -> Gateway [ctor] .   ---- event-depending splits (messages, timer)
+endfm
+
+---- Nodes ---------------------------------------------------------------------
+fmod NODE is
+  pr GATEWAY .
+  pr SET{Id} .
+  pr LIST{Id} .
+  pr LIST{2-Tuple{Id, Float}} .
+  pr STOCHASTIC-EXPRESSION .
+
+  sort Node .
+  op start : Id Id -> Node [ctor] .
+  op end : Id Id -> Node [ctor] .
+  op task : Id String Id Id StochasticExpression Set{Id} Set{Id} -> Node [ctor] .
+     ---- 1st and 2nd args. are the id of the node and its description.
+     ---- 3rd and 4th args. are the ids of the input and output flows
+     ---- 5th arg. is the stochastic expression modelling the duration of the task
+     ---- 6th arg. is the required resources
+     ---- 7th arg. is the outgoing events (to be sent when the task is completed)
+  op task2 : Id String Id Id StochasticExpression Set{Id} Set{Id} Set{Id} -> Node [ctor] .
+     ---- 1st arg is the id of the node. It may be either an Id or re-enter(Id)
+     ---- with re-enter(Id) it represents the 2nd stage at which these tasks may be at.
+     ---- When a token 1st reaches the task it initiates its activity, sends the
+     ---- outgoing events and moves the token to the 2nd stage. With the token in the
+     ---- 2nd stage, once the incoming events are available, the task initiates the rest
+     ---- of its activity.
+     ---- 2nd-6th args. are as for task
+     ---- 7th arg. is the outgoing events (to be sent when the task is completed)
+     ---- 8th arg. is the incomming events (the task blocks until they are available)
+  op split : Id Gateway Id Set{Id} -> Node [ctor] .
+     ---- an input flow and a set of output flows (parallel and event-based)
+  op split : Id Gateway Id List{2-Tuple{Id, Float}} -> Node [ctor] .
+     ---- probabilistic gateways (inclusive and exclusive)
+  op merge : Id Gateway Set{Id} Id -> Node [ctor] .
+     ---- a set of input flows, an output flow
+endfm
+
+view Node from TRIV to NODE is
+  sort Elt to Node .
+endv
+
+---- Resources -----------------------------------------------------------------
+fmod REPLICA is
+  pr ID .
+  pr POSRAT-TIME-DOMAIN-WITH-INF .
+  sort Replica .
+  ---- a replica may be either idle or in use, being then represented as a term
+  ---- of the form replica(TId, NId, T) indicating that it is being used by task
+  ---- NId in execution TId from time T.
+  op replica : Id Id Time -> Replica .
+  op idle : -> Replica .
+  ---- replicas are created with a delay that represents their allocation time
+  op delayed : Replica Time -> Replica .
+endfm
+
+view Replica from TRIV to REPLICA is
+  sort Elt to Replica .
+endv
+
+fmod RESOURCE is
+  pr LIST{2-Tuple{Float, Nat}} .
+  pr LIST{2-Tuple{Float, Float}} .
+  pr BAG{Replica} .
+
+  sort Resource .
+  op resource :
+       Id                          ---- Id of the resource
+       Nat Nat                     ---- range on the number of resources (min, max)
+       Time                        ---- allocation time
+       Nat                         ---- total number of replicas
+       List{2-Tuple{Float, Nat}}   ---- total number of replicas along time
+       Nat                         ---- number of available replicas
+       List{2-Tuple{Float, Nat}}   ---- number of available replicas along time
+       Bag{Replica}                ---- replicas of the resource
+       Nat                         ---- size of the resource's queue
+       List{2-Tuple{Float, Nat}}   ---- evolution of the size of the queue along time
+       List{2-Tuple{Float, Float}} ---- resource usage along time
+       Time ---- time all replicas are in use (reset at supervisor's checks)
+       Time ---- total time all replicas are in use
+       -> Resource [ctor] .
+
+  vars Val Val' Min Max Ttl Avl QSize : Nat .
+  var  F : Float .
+
+  ---- Since in a same time multiple tokens may be consumed, and even queues
+  ---- may be checked at the same times, we may have multiple values associated
+  ---- to the same time. Since only the last one is relevant, we removed useless
+  ---- inputs for the sequence so that it can be drawn.
+  eq (F, Val) (F, Val') = (F, Val') .
+
+endfm
+
+view Resource from TRIV to RESOURCE is
+  sort Elt to Resource .
+endv
+
+---- Events --------------------------------------------------------------------
+---- Event represents the specification of the event (as defined in the flows)
+---- EventInstance represents the actual events during execution
+fmod EVENT is
+  pr ID .
+
+  sort Event .
+  op message : Id String -> Event [ctor] . ---- message event
+  op timer : Id Nat -> Event [ctor] .      ---- timer event (max waiting time)
+endfm
+
+view Event from TRIV to EVENT is
+  sort Elt to Event .
+endv
+
+fmod EVENT-INSTANCE is
+  pr ID .
+  pr STRING .
+  pr POSRAT-TIME-DOMAIN-WITH-INF .
+
+  sort EventInstance .
+  op msg : Id -> EventInstance [ctor] .      --- message
+  op tmr : Id Time -> EventInstance [ctor] . --- timer
+endfm
+
+view EventInstance from TRIV to EVENT-INSTANCE is
+  sort Elt to EventInstance .
+endv
+
+---- Flows ---------------------------------------------------------------------
+fmod FLOW is
+  pr STOCHASTIC-EXPRESSION .
+  pr EVENT .
+
+  sort Flow .
+  op flow : Id StochasticExpression -> Flow [ctor] .          ---- flows with delay
+  op flow : Id Event Id -> Flow [ctor] . ---- tokenless, for msg-initiated swimlines
+  op flow : Id StochasticExpression Event -> Flow [ctor] .    ---- event-fired flow
+  op flow : Id StochasticExpression Event Id -> Flow [ctor] . ---- event-fired flow
+endfm
+
+view Flow from TRIV to FLOW is
+  sort Elt to Flow .
+endv
+
+---- Tokens --------------------------------------------------------------------
+mod TOKEN is
+  pr ID .
+  pr POSRAT-TIME-DOMAIN-WITH-INF .
+
+  var  Id : Id .
+  var  T : Time .
+
+  sorts Token .
+  op token : Nat -> Id . ---- token ids
+  ---- token(TId, Id, T) the token Id is at task/flow Id with delay T
+  op token : Id Id Time -> Token [ctor] .
+endm
+
+view Token from TRIV to TOKEN is
+  sort Elt to Token .
+endv
+
+---- Resource supervisor -------------------------------------------------------
+---- Although there are several types of supervisors, all of them have a common
+---- behavior, which is captured in the (abstract) superclass Supervisor.
+---- Every time-between-checks time, the supervisor evaluates the time window
+---- defined by its check-interval. Supervisor objects have a timer in its
+---- time-to-next-check attribute that is used by the mte/delta functions.
+mod SUPERVISOR-CORE is
+  inc CONFIGURATION .
+  pr POSRAT-TIME-DOMAIN-WITH-INF .
+
+  ---- class Supervisor | time-between-checks : Time,
+  ----                    time-to-next-check : Time,
+  ----                    check-interval : Time .
+  sort Supervisor .
+  subsort Supervisor < Cid .
+  op Supervisor : -> Supervisor .
+  op time-between-checks`:_ : Time -> Attribute [ctor] .
+  op time-to-next-check`:_ : Time -> Attribute [ctor] .
+  op check-interval`:_ : Time -> Attribute [ctor] .
+endm
+
+---- Description of the BPMN behavioral semantics ----------------------------
+mod BPMN-SEM is
+  pr SET{Node} .
+  pr SET{Flow} .
+  pr SET{Resource} .
+  pr LIST{Token} .
+  pr 2-TUPLE{Set{Token}, Nat} .
+  pr SAMPLER .
+  pr MY-MAP{Id, Map{Id, Time}} .
+  pr MY-MAP{Id, 4-Tuple{Nat, Nat, Time, Nat}} .
+  pr MAP{Id, Set{EventInstance}} .
+  inc SUPERVISOR-CORE .
+
+  var  IdNNNs : Map{Id, 4-Tuple{Nat, Nat, Time, Nat}} .
+  vars PId SId CId WId Sup : Oid .
+  vars TId TId' RId NId FId FId1 FId2 Id Id' MId : Id .
+  var  Nodes : Set{Node} .
+  vars Flows Flows' : Set{Flow} .
+  vars Rs Rs' Rs1 Rs2 : Set{Resource} .
+  vars Atts Atts1 Atts2 : AttributeSet .
+  var  Conf : Configuration .
+  vars TaskName MD : String .
+  vars FIds Visited RIds SEI SEII SEIO : Set{Id} .
+  vars T T' T'' T''' T1 T2 AT : Time .
+  var  GW : Gateway .
+  vars Tks Tks' Tks'' : List{Token} .
+  var  TkS : Set{Token} .
+  var  Tk : Token .
+  vars N N' N'' Avl Ttl QSize Min Max A1 A2 W : Nat .
+  vars FIdPs FIdPL1 FIdPL2 : List{2-Tuple{Id, Float}} .
+  vars P P' R F F' : Float .
+  vars TSs TSs' : Map{Id, Time} .
+  vars TTSs TTSs' TTSs1 TTSs2 TTSs3 TTSs4 : Map{Id, Map{Id, Time}} .
+  vars SE SE1 SE2 : StochasticExpression .
+  vars E E1 E2 : Event .
+  var  FNs FNs' SeqAvl SeqTtl SeqQSize : List{2-Tuple{Float, Nat}} .
+  var  ME : Map{Id, Set{EventInstance}} .
+  var  Evs : Set{EventInstance} .
+  var  Replicas : Bag{Replica} .
+  var  SeqUsage : List{2-Tuple{Float, Float}} .
+
+  sort System .
+  op {_} : Configuration -> System .
+
+  ---- Resource management -----------------------------------------------------
+  ---- resource initialization
+  op resources : Map{Id, 4-Tuple{Nat, Nat, Time, Nat}} -> Set{Resource} .
+  eq resources(((RId |-> (Min, Max, AT, N)), IdNNNs))
+    = resource(RId, Min, Max, AT,
+        N, (0.0, N), N, (0.0, N),
+        idle(N),
+        0, (0.0, 0), (0.0, 0.0), 0, 0),
+      resources(IdNNNs) .
+  eq resources(empty) = empty .
+
+  op idle : Nat -> Bag{Replica} .
+  eq idle(s N) = idle ; idle(N) .
+  eq idle(0) = none .
+
+  op grabResources :
+       Id            ---- execution
+       Id            ---- task
+       Set{Id}       ---- ids of resources to be grabbed
+       Set{Resource} ---- all resources
+       Time          ---- current time
+       -> Set{Resource} .
+  --- this function restores resources and updates corresponding times
+  --- we assume that all resources in RIds are defined in Rs
+  eq grabResources(TId, NId, (RId, RIds),
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, s Avl, SeqAvl,
+          (idle ; Replicas),
+          QSize, SeqQSize, SeqUsage, T, T'),
+        Rs),
+       T'')
+   = grabResources(TId, NId, RIds,
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl (float(T''), Avl),
+          (replica(TId, NId, T'') ; Replicas),
+          if QSize > 0 then sd(QSize, 1) else 0 fi, SeqQSize (float(T''), QSize), SeqUsage, T, T'),
+        Rs),
+       T'') .
+  eq grabResources(TId, NId, empty, Rs, T) = Rs .
+
+  op releaseResources :
+       Id            ---- execution
+       Id            ---- task
+       Set{Id}
+       Set{Resource}
+       Time          ---- current time
+       -> Set{Resource} .
+  ---- this function releases all required resources
+  ---- we assume that all resources in RIds are defined in Rs
+  ---- there might be several resources assigned to the same task, but they should
+  ---- all have the same time, so it doesn't matter which one to remove
+  eq releaseResources(TId, NId, (RId, RIds),
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl,
+          (Replicas ; replica(TId, NId, T''')),
+          QSize, SeqQSize, SeqUsage, T, T'),
+        Rs),
+       T'')
+    = releaseResources(TId, NId, RIds,
+        (resource(RId, Min, Max, AT, Ttl, SeqTtl, s Avl, SeqAvl (float(T''), s Avl),
+           (Replicas ; idle),
+           QSize, SeqQSize, SeqUsage, T + (T'' monus T'''), T'),
+         Rs),
+        T'') .
+  eq releaseResources(TId, NId, empty, Rs, T) = Rs .
+
+----
+  op getFlow : Id Set{Flow} -> [Flow] .
+  eq getFlow(FId, (flow(FId, SE), Flows)) = flow(FId, SE) .
+  eq getFlow(FId1, (flow(FId1, SE, E, FId2), Flows)) = flow(FId1, SE, E, FId2) .
+  eq getFlow(FId1, (flow(FId1, SE, E), Flows)) = flow(FId1, SE, E) .
+  eq getFlow(FId1, (flow(FId1, E, FId2), Flows)) = flow(FId1, E, FId2) .
+
+  op getTime : Flow -> [StochasticExpression] .
+  eq getTime(flow(FId, SE)) = SE .
+  eq getTime(flow(FId1, SE, E, FId2)) = SE .
+  eq getTime(flow(FId1, SE, E)) = SE .
+
+  ------------------------------------------------------------------------------
+  ---- Resource's queues
+  ---- There are no actual queues, we just keep their sizes.
+  ---- Every time a task requires a resource it is added to the corresponding queue.
+  ---- The incQueue operation is called when the token is generated, only those
+  ---- associated to tasks get in the queues, all the others are discarded.
+  op incQueuesId : Set{Resource} Id Set{Node} Time -> Set{Resource} .
+  op incQueuesSet : Set{Resource} Set{Id} Set{Node} Time -> Set{Resource} .
+  op incQueuesAux : Set{Id} Set{Resource} Time -> Set{Resource} .
+  op decQueuesId : Set{Resource} Id Set{Node} Time -> Set{Resource} .
+  op decQueuesSet : Set{Resource} Set{Id} Set{Node} Time -> Set{Resource} .
+  op decQueuesAux : Set{Id} Set{Resource} Time -> Set{Resource} .
+
+  eq incQueuesSet(Rs, (FId1, FIds), Nodes, T)
+   = incQueuesSet(incQueuesId(Rs, FId1, Nodes, T), FIds, Nodes, T) .
+  eq incQueuesSet(Rs, empty, Nodes, T) = Rs .
+
+  eq incQueuesId(Rs, FId1, (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes), T)
+    = incQueuesAux(RIds, Rs, T) .
+  eq incQueuesId(Rs, FId1, (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes), T)
+    = incQueuesAux(RIds, Rs, T) .
+  eq incQueuesId(Rs, FId1, Nodes, T) = Rs [owise] .
+
+  eq incQueuesAux((RId, RIds),
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs),
+       T'')
+    = incQueuesAux(RIds,
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, s QSize, SeqQSize (float(T''), s QSize), SeqUsage, T, T'), Rs),
+       T'') .
+  eq incQueuesAux(empty, Rs, T) = Rs .
+
+  eq decQueuesSet(Rs, (FId1, FIds), Nodes, T)
+   = decQueuesSet(decQueuesId(Rs, FId1, Nodes, T), FIds, Nodes, T) .
+  eq decQueuesSet(Rs, empty, Nodes, T) = Rs .
+
+  eq decQueuesId(Rs, FId1, (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes), T)
+   = decQueuesAux(RIds, Rs, T) .
+  eq decQueuesId(Rs, FId1, (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes), T)
+   = decQueuesAux(RIds, Rs, T) .
+  eq decQueuesId(Rs, FId1, Nodes, T) = Rs [owise] .
+
+  eq decQueuesAux((RId, RIds),
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, s QSize, SeqQSize, SeqUsage, T, T'), Rs),
+       T'')
+   = decQueuesAux(RIds,
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize (float(T''), QSize), SeqUsage, T, T'), Rs),
+       T'') .
+  eq decQueuesAux(empty, Rs, T) = Rs .
+
+  ---- Event management
+  ---- addActiveEvents updates the set of active events by adding a couple
+  ---- (execution ident, event ident) for each event identifier produced by a task
+  op addActiveEvents : Id Set{Id} Map{Id, Set{EventInstance}} ->  Map{Id,Set{EventInstance}} .
+
+  eq addActiveEvents(TId, (Id, SEI), ME)
+    = addActiveEvents(TId, SEI, insert(TId, insert(msg(Id), ME[TId]), ME)) .
+  eq addActiveEvents(TId, empty, ME) = ME .
+
+  ---- Process -----------------------------------------------------------------
+  ---- Description of the process, remains unchanged along executions
+  ---- class Process | nodes : Set{Node}, flows : Set{Flow} .
+  sort Process .
+  subsort Process < Cid .
+
+  op Process : -> Process [ctor] .
+  op nodes :_ : Set{Node} -> Attribute [ctor] .
+  op flows :_ : Set{Flow} -> Attribute [ctor] .
+
+  ---- constructor
+  op PROCESS : Oid -> Object .
+  op initial : -> Id . ---- initial is the start task
+
+  ---- class Workload | timer : Time, rate : StochasticExpression, works : Nat .
+  sort Workload .
+  subsort Workload < Cid .
+  op Workload : -> Workload .
+  op timer :_ : Time -> Attribute [ctor] .
+  op rate :_ : StochasticExpression -> Attribute [ctor] .
+  op works :_ : Nat -> Attribute [ctor] .
+
+  rl [Workload] :
+     < WId : Workload | timer : 0, rate : SE, works : s W >
+     < SId : Simulation | tokens : Tks, events : ME, Atts1 >
+     < CId : Counter | counter : N >
+  => < WId : Workload | timer : p1(eval(SE, N)), rate : SE, works : W >
+     < SId : Simulation |
+         tokens : add(Tks, token(token(s W), initial, 0)),
+         events : (token(s W) |-> empty, ME),
+         Atts1 >
+     < CId : Counter | counter : p2(eval(SE, N)) > .
+
+  ---- constructor
+  op WORKLOAD : Oid StochasticExpression Nat -> Object .
+  eq WORKLOAD(WId, SE, W) = < WId : Workload | timer : 0, rate : SE, works : W > .
+
+  ---- Simulation --------------------------------------------------------------
+  ---- Information on the on-going simulation, it keeps the set of tokens
+  ---- in the process and the global time
+  ---- class Simulation |
+  ----   tokens : List{Token},
+  ----   gtime : Time,                         ---- global system time
+  ----   process-execs : Map{Id, Time},        ---- process exec. times (for each run)
+  ----   process-tstamps : Map{Id, Time}       ---- time stamps (for each run)
+  ----   size-process-execs : Nat              ---- to avoid re-calculation
+  ----   size-process-tstamps : Nat            ---- to avoid re-calculation
+  ----   sync-times : Map{Id, Map{Id, Time}},  ---- each merge gateway has a sync time
+  ----   sync-tstamps : Map{Id, Map{Id, Time}} ---- time stamps (par and inc) merge gates
+  ----   task-times : Map{Id, Map{Id, Time}},  ---- task's exec time
+  ----   task-tstamps : Map{Id, Time}          ---- start of the exec. of the task
+  ----   resources : Set{Resource},            ---- info on all resources
+  ----   events : Map{Id, Set{EventInstance}}  ---- events in each execution
+
+  sort Simulation .
+  subsort Simulation < Cid .
+  op Simulation : -> Simulation [ctor] .
+  op tokens :_ : List{Token} -> Attribute [ctor] .
+  op gtime :_ : Time -> Attribute [ctor] .
+  op process-execs :_ : Map{Id, Time} -> Attribute [ctor] .
+  op process-tstamps :_ : Map{Id, Time} -> Attribute [ctor] .
+  op size-process-execs :_ : Nat -> Attribute [ctor] .
+  op size-process-tstamps :_ : Nat -> Attribute [ctor] .
+  op sync-times :_ : Map{Id, Map{Id, Time}} -> Attribute [ctor] .
+  op sync-tstamps :_ : Map{Id, Map{Id, Time}} -> Attribute [ctor] .
+  op task-times :_ : Map{Id, Map{Id, Time}} -> Attribute [ctor] .
+  op task-tstamps :_ : Map{Id, Map{Id, Time}} -> Attribute [ctor] .
+  op resources :_ : Set{Resource} -> Attribute [ctor] .
+  op events :_ : Map{Id, Set{EventInstance}} -> Attribute [ctor] .
+
+  ---- constructor
+  op SIMULATION : Oid Map{Id, 4-Tuple{Nat, Nat, Time, Nat}} -> Object .
+  eq SIMULATION(SId, IdNNNs)
+    = < SId : Simulation |
+        tokens : nil, ---- no tokens
+        gtime : 0,
+        process-execs : (empty).Map{Id, Time},
+        size-process-execs : 0,
+        process-tstamps : (empty).Map{Id, Time},
+        size-process-tstamps : 0,
+        sync-times : (empty).Map{Id, Map{Id, Time}},
+        sync-tstamps : (empty).Map{Id, Map{Id, Time}},
+        task-times : (empty).Map{Id, Map{Id, Time}},
+        task-tstamps : (empty).Map{Id, Map{Id, Time}},
+        resources : resources(IdNNNs),
+        events : empty > .
+
+  ---- Scheduler ---------------------------------------------------------------
+  ---- The token at the front is the one scheduled for the smallest time.
+  ---- insert inserts the tokens in the set into the list (scheduler).
+  ---- The list is assumed to be a valid scheduler (sorted tokens).
+  ---- If the token at the front cannot fire an action (missing resources,
+  ---- missing additional tokens in a merge gate, etc.) the first active token
+  ---- is moved to the front (see the shift function).
+  op add : List{Token} Set{Token} -> List{Token} .
+  eq add(token(TId, Id, T) Tks, (token(TId', Id', T'), TkS))
+    = if T <= T'
+      then add(token(TId, Id, T) add(Tks, token(TId', Id', T')), TkS)
+      else add(token(TId', Id', T') token(TId, Id, T) Tks, TkS)
+      fi .
+  eq add(nil, (Tk, TkS)) = add(Tk, TkS) .
+  eq add(Tks, empty) = Tks .
+
+  ---- Counter -----------------------------------------------------------------
+  ---- This counter is used for the generation of pseudo-random numbers,
+  ---- every time a random number is generated using rand(n) the counter
+  ---- is incremented
+  ---- class Counter | counter : Nat .
+  sort Counter .
+  subsort Counter < Cid .
+  op Counter : -> Counter [ctor] .
+  op counter :_ : Nat -> Attribute [ctor] .
+
+  ---- constructor
+  op COUNTER : Oid -> Object .
+  eq COUNTER(CId) = < CId : Counter | counter : 0 > .
+
+  ------------------------------------------------------------------------------
+  ---- Global time - tick
+  ---- We may require to advance time even with timers to 0, if there are no
+  ---- active actions. E.g., a token may be ready at a merge gate but a token in
+  ---- some other input flow may be missing.
+
+  crl [tick] : { Conf } => { delta(Conf, T2) }
+  if T2 := mte(Conf)
+  /\ T2 =/= 0 .
+
+  ---- mte function ------------------------------------------------------------
+  op mte : Configuration -> Time .
+  op mteAux : Configuration List{Token} -> Time .
+  op mte : Set{Resource} -> Time .
+  op mte : Bag{Replica} -> Time .
+  op maxTokenTimePar : Set{Id} List{Token} Id Time -> Time .
+  op maxTokenTimeInc : Set{Id} Set{Node} List{Token} List{Token} Id Time -> Time .
+
+  eq mte(< Sup : C:Supervisor | time-to-next-check : T, Atts2 > Conf)
+    = minimum(T, mte(Conf)) .
+  eq mte(< WId : Workload | timer : T, works : W, Atts > Conf)
+    = minimum(if W == 0 then INF else T fi, mte(Conf)) .
+
+  eq mte(< SId : Simulation | tokens : Tks, resources : Rs, Atts1 > Conf)
+    = minimum(
+        mte(Rs),
+        mteAux(< SId : Simulation | tokens : Tks, resources : Rs, Atts1 > Conf, Tks))
+    [owise] .
+
+  eq mte((resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs))
+    = minimum(mte(Replicas), mte(Rs)) .
+  eq mte(empty) = INF .
+
+  eq mte((replica(TId, NId, T) ; Replicas)) = minimum(T, mte(Replicas)) .
+  eq mte(Replicas) = INF [owise] .
+
+  eq mteAux(
+       < PId : Process |
+           nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+           Atts >
+       < SId : Simulation |
+           tokens : (token(TId, FId1, T) Tks),
+           resources : Rs,
+           Atts1 >
+       Conf,
+       Tks')
+    = if T > 0
+         or-else
+         allResourcesAvailable(RIds, Rs)
+      then T
+      else mteAux(
+             < PId : Process |
+                 nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+                 Atts >
+             < SId : Simulation |
+                 tokens : Tks,
+                 resources : Rs,
+                 Atts1 >
+             Conf,
+             Tks')
+      fi .
+      eq mteAux(
+           < PId : Process |
+               nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+               flows : Flows,
+               Atts >
+           < SId : Simulation |
+               tokens : (token(TId, FId1, T) Tks),
+               resources : Rs,
+               Atts1 >
+           Conf:Configuration,
+           Tks')
+        = if T > 0
+             or-else
+             allResourcesAvailable(RIds, Rs)
+          then T
+          else mteAux(
+                 < PId : Process |
+                     nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+                     flows : Flows,
+                     Atts >
+                 < SId : Simulation |
+                     tokens : Tks,
+                     resources : Rs,
+                     Atts1 >
+                 Conf:Configuration,
+                 Tks')
+          fi .
+      eq mteAux(
+           < PId : Process | nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes), Atts >
+           < SId : Simulation | tokens : (token(TId, NId, T) Tks), events : ((TId |-> Evs), ME), Atts1 >
+           Conf:Configuration,
+           Tks')
+        = if isEventActive(MId, Evs)
+          then min(T,
+                   mteAux(< PId : Process | nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes), Atts >
+                          < SId : Simulation | tokens : Tks, events : ((TId |-> Evs), ME), Atts1 >
+                          Conf:Configuration,
+                          Tks'))
+          else mteAux(
+                 < PId : Process | nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes), Atts >
+                 < SId : Simulation | tokens : Tks, events : ((TId |-> Evs), ME), Atts1 >
+                 Conf:Configuration,
+                 Tks')
+          fi .
+  eq mteAux(
+       < PId : Process | nodes : (merge(NId, parallel, (FId1, FIds), FId2), Nodes), Atts >
+       < SId : Simulation |
+           tokens : (token(TId, FId1, T) Tks),
+           sync-tstamps : TTSs,
+           Atts1 >
+       Conf,
+       Tks')
+    = if TTSs[TId][NId] == undefined
+      then T
+      else min(maxTokenTimePar(FIds, Tks, TId, T),
+               mteAux(
+                    < PId : Process | nodes : (merge(NId, parallel, (FId1, FIds), FId2), Nodes), Atts >
+                    < SId : Simulation |
+                        tokens : removeTokens(TId, FIds, Tks),
+                        sync-tstamps : TTSs,
+                        Atts1 >
+                    Conf,
+                    Tks'))
+      fi .
+  --- for the inclusive merge we take the max time of the tokens already in the incoming flows,
+  --- if there were pending tokens the merge wouldn't be applied, but there would be
+  --- something to happen elsewhere
+  eq mteAux(
+       < PId : Process | nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), Atts >
+       < SId : Simulation |
+           tokens : (token(TId, FId1, T) Tks),
+           sync-tstamps : TTSs,
+           Atts1 >
+       Conf,
+       Tks')
+    = if TTSs[TId][NId] == undefined
+      then T
+      else min(maxTokenTimeInc(FIds, (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), Tks, Tks', TId, T),
+               mteAux(
+                    < PId : Process | nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), Atts >
+                    < SId : Simulation |
+                        tokens : removeTokens(TId, FIds, Tks),
+                        sync-tstamps : TTSs,
+                        Atts1 >
+                    Conf,
+                    Tks'))
+      fi .
+  eq mteAux(
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+         flows : (flow(FId1, SE, message(MId, MD)), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, T) Tks), ---- token is at gateway
+         events : ((TId |-> (msg(MId), Evs)), ME),
+         Atts1 >,
+      Tks')
+    = min(T,
+        mteAux(
+           < PId : Process |
+               nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+               flows : (flow(FId1, SE, message(MId, MD)), Flows),
+               Atts >
+           < SId : Simulation |
+               tokens : (token(TId, NId, T) Tks), ---- token is at gateway
+               events : ((TId |-> Evs), ME),
+               Atts1 >,
+            Tks')) .
+  eq mteAux(
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+         flows : (flow(FId1, SE, timer(MId, T)), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, T1) Tks), ---- token is at gateway
+         events : ((TId |-> (tmr(MId, T2), Evs)), ME),
+         Atts1 >,
+      Tks')
+    = min(
+        max(T1, T2),
+        mteAux(
+           < PId : Process |
+               nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+               flows : (flow(FId1, SE, timer(MId, T)), Flows),
+               Atts >
+           < SId : Simulation |
+               tokens : (token(TId, NId, T1) Tks), ---- token is at gateway
+               events : ((TId |-> Evs), ME),
+               Atts1 >,
+            Tks')) .
+  eq mteAux(
+      < PId : Process |
+          flows : (flow(FId1, SE, message(MId, MD), FId2), Flows),
+          Atts >
+      < SId : Simulation |
+          tokens : (token(TId, FId1, T) Tks), ---- the token is in the flow
+          events : ((TId |-> Evs), ME), ---- the expected message is ready
+          Atts1 >
+      Conf, Tks')
+   = if isActiveOneMsgFlow(FId1, flow(FId1, SE, message(MId, MD), FId2), Evs)
+     then T
+     else INF
+     fi .
+ ceq mteAux(
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, FIds), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks), ---- token is at gateway
+         events : ((TId |-> Evs), ME),
+         Atts1 >,
+      Tks')
+    = mteAux(
+        < PId : Process |
+            nodes : (split(NId, eventbased, FId, FIds), Nodes),
+            flows : Flows,
+            Atts >
+        < SId : Simulation |
+            tokens : Tks,
+            events : ((TId |-> Evs), ME),
+            Atts1 >,
+         Tks')
+    if not isActiveOneMsgFlow(FIds, Flows, Evs)
+    /\ not isZeroTimerFlow(FIds, Flows, Evs) .
+  eq mteAux(
+       < SId : Simulation | tokens : (token(TId, Id, T) Tks), Atts1 >
+       Conf, Tks')
+    = T
+    [owise] .
+  eq mteAux(< SId : Simulation | tokens : nil, Atts1 > Conf, Tks) = INF .
+
+  eq maxTokenTimePar((FId, FIds), Tks token(TId, FId, T1) Tks', TId, T2)
+    = maxTokenTimePar(FIds, Tks Tks', TId, max(T1, T2)) .
+  eq maxTokenTimePar(empty, Tks, TId, T) = T .
+  eq maxTokenTimePar(FIds, Tks, TId, T) = INF [owise] .
+
+  eq maxTokenTimeInc((FId, FIds), Nodes, Tks token(TId, FId, T1) Tks', Tks'', TId, T2)
+    = maxTokenTimeInc(FIds, Nodes, Tks Tks', Tks'', TId, max(T1, T2)) .
+  eq maxTokenTimeInc((FId, FIds), Nodes, Tks, Tks', TId, T)
+    = if expectingToken(TId, FId, Nodes, Tks', FId)
+      then INF
+      else maxTokenTimeInc(FIds, Nodes, Tks, Tks', TId, T)
+      fi
+    [owise] .
+  eq maxTokenTimeInc(empty, Nodes, Tks, Tks', TId, T) = T .
+
+  ---- delta function ----------------------------------------------------------
+  op delta : Configuration Time -> Configuration .
+  op delta : List{Token} Time -> List{Token} .
+  op delta : Set{Resource} Time -> Set{Resource} .
+  op delta : Bag{Replica} Time -> Bag{Replica} .
+  op delta : Map{Id, Set{EventInstance}} Time -> Map{Id, Set{EventInstance}} .
+
+  eq delta(
+       < SId : Simulation | tokens : Tks, resources : Rs, events : ME, gtime : T, Atts >
+       Conf,
+       T')
+    = < SId : Simulation |
+          tokens : delta(Tks, T'),
+          resources : delta(Rs, T'),
+          events : delta(ME, T'),
+          gtime : (T plus T'),
+          Atts >
+      delta(Conf, T') .
+  eq delta(< Sup : S:Supervisor | time-to-next-check : T'', Atts > Conf, T')
+    = < Sup : S:Supervisor | time-to-next-check : (T'' monus T'), Atts >
+      delta(Conf, T') .
+  eq delta(< WId : Workload | timer : T, Atts > Conf, T')
+    = < WId : Workload | timer : (T monus T'), Atts >
+      delta(Conf, T') .
+  eq delta(Conf, T) = Conf [owise] .
+
+  eq delta(token(TId, Id, T1) Tks, T2)
+    = token(TId, Id, T1 monus T2)
+      delta(Tks, T2) .
+  eq delta(nil, T) = nil .
+
+  eq delta(
+      (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs),
+      T2)
+    = (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, delta(Replicas, T2),
+         QSize, SeqQSize, SeqUsage, T, T'),
+       delta(Rs, T2)) .
+  eq delta((empty).Set{Resource}, T) = empty .
+
+  eq delta((delayed(idle, T) ; Replicas), T')
+    = delayed(idle, T monus T') ; delta(Replicas, T') .
+  eq delta(Replicas, T) = Replicas [owise] .
+
+  --- this decrements all timer events of time T
+  eq delta(((TId |-> (tmr(Id, T), Evs)), ME), T2)
+  --- this rule applies when there is still a timer to decrement
+    = ((TId |-> (tmr(Id, T monus T2), Evs)),
+       delta(ME, T2)) .
+  eq delta(ME, T2) = ME [owise] .  --- this rule applies when all timers have been decremented
+
+  op allResourcesAvailable : Set{Id} Set{Resource} -> Bool .
+  --- checks whether the resources required in the first set are Avl in the second
+  --- we assume that all resources in RIds are defined in Rs
+  eq allResourcesAvailable((RId, RIds),
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, s Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs))
+    = allResourcesAvailable(RIds,
+       (resource(RId, Min, Max, AT, Ttl, SeqTtl, Avl, SeqAvl, Replicas, QSize, SeqQSize, SeqUsage, T, T'), Rs)) .
+  eq allResourcesAvailable(empty, Rs) = true .
+  eq allResourcesAvailable(RIds, Rs) = false [owise] .
+
+  ------------------------------------------------------------------------------
+  ---- Initiation of the process
+  crl [startProc] :
+     < PId : Process |
+         nodes : (start(NId, FId), Nodes),
+         flows : (flow(FId, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks),
+         gtime : T,
+         process-tstamps : TSs,
+         size-process-tstamps : N'',
+         task-times : TTSs1,
+         sync-times : TTSs2,
+         task-tstamps : TTSs3,
+         sync-tstamps : TTSs4,
+         resources : Rs,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (start(NId, FId), Nodes),
+         flows : (flow(FId, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId, T')),
+         gtime : T,
+         process-tstamps : insert(TId, T, TSs), ---- time stamp with the time at initialization
+         size-process-tstamps : size(insert(TId, T, TSs)),
+         task-times : insert(TId, empty, TTSs1),
+         sync-times : insert(TId, empty, TTSs2),
+         task-tstamps : insert(TId, empty, TTSs3),
+         sync-tstamps : insert(TId, empty, TTSs4),
+         resources : incQueuesId(Rs, FId, (start(NId, FId), Nodes), T),
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if TSs[TId] = undefined ---- No previous execution with the same id
+  /\ [T', N'] := eval(SE, N)
+  [print TId ", " NId ", " T] .
+
+  ------------------------------------------------------------------------------
+  ---- Termination of the process
+  rl [endProc] :
+     < PId : Process |
+         nodes : (end(NId, FId), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId, 0) Tks),
+         gtime : T,
+         process-execs : TSs,
+         size-process-execs : N,
+         process-tstamps : TSs',
+         Atts1 >
+  => < PId : Process |
+         nodes : (end(NId, FId), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : Tks,
+         gtime : T,
+         process-execs : insert(TId, T monus TSs'[TId], TSs),
+           ---- time elapsed between the current time and the initialization
+           ---- in case of multiple end events, this keeps the last one
+         size-process-execs : size(insert(TId, T monus TSs'[TId], TSs)),
+         process-tstamps : TSs',
+         Atts1 >
+  [print TId ", " NId ", " T] .
+
+  ------------------------------------------------------------------------------
+  ---- Initiation of a task
+  rl [initTask] :
+     < PId : Process |
+         nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         task-tstamps : TTSs,
+         gtime : T,
+         resources : Rs,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => if allResourcesAvailable(RIds, Rs)
+     then initTaskAux(
+            < PId : Process |
+                nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                task-tstamps : TTSs,
+                gtime : T,
+                resources : Rs,
+                Atts1 >
+            < CId : Counter | counter : N >,
+            eval(SE, N))
+     else shift(
+            < PId : Process |
+                nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                task-tstamps : if TTSs[TId][NId] == undefined
+                               then insert(TId, insert(NId, T, TTSs[TId]), TTSs)
+                               else TTSs
+                               fi, ---- if there are loops, we overwrite stamps,
+                gtime : T,
+                resources : Rs,
+                Atts1 >
+            < CId : Counter | counter : N >)
+     fi .
+
+ op initTaskAux : Configuration Tuple{Time, Int} -> Configuration [frozen] .
+ eq initTaskAux(
+      < PId : Process |
+          nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+          Atts >
+      < SId : Simulation |
+          tokens : (token(TId, FId1, 0) Tks),
+          task-tstamps : TTSs,
+          gtime : T,
+          resources : Rs,
+          Atts1 >
+      < CId : Counter | counter : N >,
+      [T', N'])
+   = < PId : Process |
+           nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+           Atts >
+        < SId : Simulation |
+           tokens : add(Tks, token(TId, NId, T')),
+           task-tstamps : if TTSs[TId][NId] == undefined
+                          then insert(TId, insert(NId, T, TTSs[TId]), TTSs)
+                          else TTSs
+                          fi, ---- if there are loops, we overwrite stamps
+           gtime : T,
+           resources : grabResources(TId, NId, RIds, Rs, T),
+           Atts1 >
+       < CId : Counter | counter : N' >
+  [print TId ", " NId "-init, " T] .
+
+ rl [initTask] :
+     < PId : Process |
+         nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         task-tstamps : TTSs,
+         gtime : T,
+         resources : Rs,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => if allResourcesAvailable(RIds, Rs)
+     then initTask2Aux(
+            < PId : Process |
+                nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                task-tstamps : TTSs,
+                gtime : T,
+                resources : Rs,
+                Atts1 >
+            < CId : Counter | counter : N >,
+            eval(SE, N))
+     else shift(
+            < PId : Process |
+                nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                task-tstamps : if TTSs[TId][NId] == undefined
+                               then insert(TId, insert(NId, T, TTSs[TId]), TTSs)
+                               else TTSs
+                               fi, ---- if there are loops, we overwrite stamps,
+                gtime : T,
+                resources : Rs,
+                Atts1 >
+            < CId : Counter | counter : N >)
+     fi .
+
+ op initTask2Aux : Configuration Tuple{Time, Int} -> Configuration [frozen] .
+ eq initTask2Aux(
+      < PId : Process |
+          nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+          Atts >
+      < SId : Simulation |
+          tokens : (token(TId, FId1, 0) Tks),
+          task-tstamps : TTSs,
+          gtime : T,
+          resources : Rs,
+          Atts1 >
+      < CId : Counter | counter : N >,
+      [T', N'])
+   = < PId : Process |
+         nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, NId, T')),
+         task-tstamps : if TTSs[TId][NId] == undefined
+                        then insert(TId, insert(NId, T, TTSs[TId]), TTSs)
+                        else TTSs
+                        fi, ---- if there are loops, we overwrite stamps
+         gtime : T,
+         resources : grabResources(TId, NId, RIds, Rs, T),
+         Atts1 >
+     < CId : Counter | counter : N' >
+  [print TId ", " NId "-init, " T] .
+
+  ------------------------------------------------------------------------------
+  ---- Execution / completion of a task
+  crl [execTask] :
+     < PId : Process |
+         nodes : (task(NId, TaskName, FId1, FId2, SE1, RIds, SEI), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks),
+         task-tstamps : TTSs,
+         task-times : TTSs',
+         gtime : T,
+         resources : Rs,
+         events : ME,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (task(NId, TaskName, FId1, FId2, SE1, RIds, SEI), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId2, T')),
+         task-tstamps : TTSs,
+         task-times : insert(TId, insert(NId, T monus TTSs[TId][NId], TTSs'[TId]), TTSs'),
+         gtime : T,
+         resources : incQueuesId(
+                       releaseResources(TId, NId, RIds, Rs, T),
+                       FId2,
+                       (task(NId, TaskName, FId1, FId2, SE1, RIds, SEI), Nodes), T),
+         events : addActiveEvents(TId, SEI, ME),
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if [T', N'] := eval(getTime(getFlow(FId2, Flows)), N)
+  [print TId ", " NId "-end, " T] .
+
+  rl [execTask] :
+     < PId : Process |
+         nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks),
+         gtime : T,
+         events : ME,
+         Atts1 >
+  => < PId : Process |
+         nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, re-enter(NId), 0)),
+         gtime : T,
+         events : addActiveEvents(TId, SEIO, ME),
+         Atts1 >
+  [print TId ", " NId "-end, " T] .
+
+ crl [execTask] :
+    < PId : Process |
+        nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes),
+        flows : Flows,
+        Atts >
+    < SId : Simulation |
+        tokens : (token(TId, re-enter(NId), 0) Tks),
+        task-tstamps : TTSs,
+        task-times : TTSs',
+        gtime : T,
+        resources : Rs,
+        events : ((TId |-> (msg(MId), Evs)), ME),
+        Atts1 >
+    < CId : Counter | counter : N >
+ => < PId : Process |
+        nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes),
+        flows : Flows,
+        Atts >
+    < SId : Simulation |
+        tokens : add(Tks, token(TId, FId2, T')),
+        task-tstamps : TTSs,
+        task-times : insert(TId, insert(NId, T monus TTSs[TId][NId], TTSs'[TId]), TTSs'),
+        gtime : T,
+        resources : incQueuesId(
+                      releaseResources(TId, NId, RIds, Rs, T), ---- , T monus TTSs[TId][NId]
+                      FId2,
+                      (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes), T),
+        events : ((TId |-> Evs), ME),
+        Atts1 >
+    < CId : Counter | counter : N' >
+ if [T', N'] := eval(getTime(getFlow(FId2, Flows)), N)
+ [print TId ", " NId "-end, " T] .
+
+  ------------------------------------------------------------------------------
+  ---- Split gateway - exclusive
+  crl [splitGatewayExclusive] : ---- probabilistic case with multiple executions
+     < PId : Process |
+         nodes : (split(NId, exclusive, FId1, FIdPs), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         gtime : T,
+         resources : Rs,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (split(NId, exclusive, FId1, FIdPs), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, p1(genTokens(TId, flow(FId, SE), N))),
+         gtime : T,
+         resources : incQueuesId(Rs, FId,
+                       (split(NId, exclusive, FId1, FIdPs), Nodes), T),
+         Atts1 >
+     < CId : Counter | counter : (s N) >
+  if flow(FId, SE) := selectFlow(FIdPs, Flows, rand(N)) .
+
+  ---- We assume the probs sum 1
+  op selectFlow : List{2-Tuple{Id, Float}} Set{Flow} Float -> Flow .
+  eq selectFlow((FId, P) FIdPs, (flow(FId, SE), Flows), P')
+    = if P' <= P or FIdPs == nil ---- if it's the last one takes it, so if probabilities don't sum 1 it works
+      then flow(FId, SE)
+      else selectFlow(FIdPs, Flows, P' - P)
+      fi .
+
+  op genTokens : Id Set{Flow} Nat -> Tuple{Set{Token}, Nat} .
+  eq genTokens(TId, (flow(FId2, SE), Flows), N)
+    = ( (token(TId, FId2, p1(eval(SE, N))),
+         p1(genTokens(TId, Flows, p2(eval(SE, N))))),
+        p2(genTokens(TId, Flows, p2(eval(SE, N)))) ) .
+  eq genTokens(TId, empty, N) = ( empty, N ) .
+
+  ------------------------------------------------------------------------------
+  ---- Split gateway - parallel
+  rl [splitGatewayParallel] :
+     < PId : Process |
+         nodes : (split(NId, parallel, FId, FIds), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId, 0) Tks),
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (split(NId, parallel, FId, FIds), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, p1(generateTokensSplitParallel(TId, FIds, Flows, N))),
+         resources : incQueuesSet(Rs, FIds,
+                      (split(NId, parallel, FId, FIds), Nodes), T),
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : p2(generateTokensSplitParallel(TId, FIds, Flows, N)) > .
+
+  --- generates a token in the configuration for all outgoing flows
+  op generateTokensSplitParallel : Id Set{Id} Set{Flow} Nat -> Tuple{Set{Token}, Nat} .
+  eq generateTokensSplitParallel(TId, (FId, FIds), Flows, N)
+    = ( (token(TId, FId, p1(eval(getTime(getFlow(FId, Flows)), N))),
+         p1(generateTokensSplitParallel(TId, FIds, Flows,
+               p2(eval(getTime(getFlow(FId, Flows)), N))))),
+        p2(generateTokensSplitParallel(TId, FIds, Flows,
+              p2(eval(getTime(getFlow(FId, Flows)), N)))) ) .
+  eq generateTokensSplitParallel(TId, empty, Flows, N) = ( empty, N ) .
+
+  ------------------------------------------------------------------------------
+  ---- Split gateway - inclusive
+  crl [splitGatewayInclusive] :
+     < PId : Process |
+         nodes : (split(NId, inclusive, FId, FIdPs), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId, 0) Tks),
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => if Flows' == empty ---- at least one must be selected
+     then < PId : Process |
+              nodes : (split(NId, inclusive, FId, FIdPs), Nodes),
+              flows : Flows,
+              Atts >
+          < SId : Simulation |
+              tokens : (token(TId, FId, 0) Tks),
+              resources : Rs,
+              gtime : T,
+              Atts1 >
+          < CId : Counter | counter : (N + size(FIdPs)) >
+     else < PId : Process |
+              nodes : (split(NId, inclusive, FId, FIdPs), Nodes),
+              flows : Flows,
+              Atts >
+          < SId : Simulation |
+              tokens : add(Tks, p1(genTokens(TId, Flows', N + size(FIdPs)))),
+              resources : incQueuesSet(Rs,
+                            ids(Flows'),
+                            (split(NId, inclusive, FId, FIdPs), Nodes), T),
+              gtime : T,
+              Atts1 >
+          < CId : Counter | counter : p2(genTokens(TId, Flows', N + size(FIdPs))) >
+     fi
+  if Flows' := selectFlows(FIdPs, Flows, N) .
+
+  op selectFlows : List{2-Tuple{Id, Float}} Set{Flow} Nat -> Set{Flow} .
+  eq selectFlows((FId, P) FIdPs, (flow(FId, SE), Flows), N)
+    = if P > rand(N) then flow(FId, SE) else empty fi,
+      selectFlows(FIdPs, Flows, s N) .
+  eq selectFlows(FIdPs, Flows, N) = empty [owise] .
+
+  op ids : Set{Flow} -> Set{Id} .
+  eq ids((flow(FId, SE), Flows)) = FId, ids(Flows) .
+  eq ids(empty) = empty .
+
+  ------------------------------------------------------------------------------
+  ---- token-less flow
+  crl [tokenLessFlow] :
+     < PId : Process |
+         nodes : Nodes,
+         flows : (flow(FId1, message(MId, MD), FId2), flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : Tks, ---- no token required
+         events : ((TId |-> (msg(MId), Evs)), ME), ---- the expected message is ready
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : Nodes,
+         flows : (flow(FId1, message(MId, MD), FId2), flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId2, T')), ---- put token in the  corresponding follow up flow
+         events : (TId |-> Evs, ME),
+         resources : incQueuesId(Rs, FId2, Nodes, T),
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if [T', N'] := eval(SE, N) .
+
+  ------------------------------------------------------------------------------
+  ---- Merge gateway - exclusive
+  ---- no sync times for exclusives merge gates, only one token is required
+  crl [mergeGatewayExclusive] :
+     < PId : Process |
+         nodes : (merge(NId, exclusive, (FId1, FIds), FId2), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (merge(NId, exclusive, (FId1, FIds), FId2), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId2, T')),
+         resources : incQueuesId(Rs, FId2, (merge(NId, exclusive, (FId1, FIds), FId2), Nodes), T),
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if [T', N'] := eval(getTime(getFlow(FId2, Flows)), N) .
+
+  ------------------------------------------------------------------------------
+  ---- Merge gateway - inclusive (BPMN 2.0)
+
+  crl [mergeGatewayInclusive2] :
+     < PId : Process |
+         nodes : (merge(NId, inclusive2.0, (FId1, FIds), FId2), Nodes),
+         flows : (flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (merge(NId, inclusive2.0, (FId1, FIds), FId2), Nodes),
+         flows : (flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId2, T')),
+         resources : incQueuesId(Rs, FId2, (merge(NId, inclusive2.0, (FId1, FIds), FId2), Nodes), T),
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if [T', N'] := eval(SE, N) .
+
+  ------------------------------------------------------------------------------
+  ---- Merge gateway - parallel
+  rl [mergeGatewayParallel] : ---- multiple executions
+     < PId : Process |
+         nodes : (merge(NId, parallel, (FId1, FIds), FId), Nodes),
+         flows : (flow(FId, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         sync-tstamps : TTSs,
+         sync-times : TTSs',
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => if allTokensParallel(TId, FIds, Tks)
+     then mergeGatewayParallelAux(
+            < PId : Process |
+                nodes : (merge(NId, parallel, (FId1, FIds), FId), Nodes),
+                flows : (flow(FId, SE), Flows),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                sync-tstamps : TTSs,
+                sync-times : TTSs',
+                gtime : T,
+                Atts1 >
+            < CId : Counter | counter : N >,
+            eval(SE, N))
+     else shift(
+            < PId : Process |
+                nodes : (merge(NId, parallel, (FId1, FIds), FId), Nodes),
+                flows : (flow(FId, SE), Flows),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                sync-tstamps : if TTSs[TId][NId] == undefined ---- added only if it's the 1st one
+                               then insert(TId, insert(NId, T, TTSs[TId]), TTSs)
+                               else TTSs
+                               fi,
+                sync-times : TTSs',
+                gtime : T,
+                Atts1 >
+            < CId : Counter | counter : N >)
+      fi .
+
+  op mergeGatewayParallelAux : Configuration Tuple{Time, Int} -> Configuration [frozen] .
+  eq mergeGatewayParallelAux(
+       < PId : Process |
+           nodes : (merge(NId, parallel, (FId1, FIds), FId), Nodes),
+           flows : (flow(FId, SE), Flows),
+           Atts >
+       < SId : Simulation |
+           tokens : (token(TId, FId1, 0) Tks),
+           sync-tstamps : TTSs,
+           sync-times : TTSs',
+           gtime : T,
+           resources : Rs,
+           Atts1 >
+       < CId : Counter | counter : N >,
+       [T', N'])
+    = < PId : Process |
+             nodes : (merge(NId, parallel, (FId1, FIds), FId), Nodes),
+             flows : (flow(FId, SE), Flows),
+             Atts >
+         < SId : Simulation |
+             tokens : add(removeTokens(TId, FIds, Tks), token(TId, FId, T')),
+             sync-tstamps : TTSs, ---- insert(TId, remove(NId, TTSs[TId]), TTSs), to remove tstamp
+             sync-times : insert(TId,
+                            insert(NId,
+                              if TTSs[TId][NId] == undefined then 0 else T - TTSs[TId][NId] fi,
+                              TTSs'[TId]),
+                            TTSs'),
+             gtime : T,
+             resources : incQueuesId(Rs, FId, (merge(NId, parallel, (FId1, FIds), FId), Nodes), T),
+             Atts1 >
+         < CId : Counter | counter : N' > .
+
+  ---- checks if there is a token for all incoming flows
+  op allTokensParallel : Id Set{Id} List{Token} -> Bool .
+  eq allTokensParallel(TId, (FId, FIds), (Tks token(TId, FId, 0) Tks'))
+    = allTokensParallel(TId, FIds, Tks Tks') .
+  eq allTokensParallel(TId, empty, Tks) = true .
+  eq allTokensParallel(TId, FIds, Tks) = false [owise] .
+
+  ---- removes all the incoming tokens
+  op removeTokens : Id Set{Id} List{Token} -> List{Token} .
+  eq removeTokens(TId, (FId, FIds), Tks token(TId, FId, 0) Tks')
+    = removeTokens(TId, FIds, Tks Tks') .
+  eq removeTokens(TId, FIds, Tks) = Tks [owise] .
+
+  ------------------------------------------------------------------------------
+  ---- Merge gateway - inclusive (BPMN 1.0)
+
+  rl [mergeGatewayInclusive] : ---- multiple executions
+     < PId : Process |
+         nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes),
+         flows : (flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         sync-tstamps : TTSs,
+         sync-times : TTSs',
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => if allTokensInclusive(TId, FIds, Tks, (merge(NId, inclusive, (FId1, FIds), FId2), Nodes))
+     then mergeGatewayInclusiveAux(
+            < PId : Process |
+                nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes),
+                flows : (flow(FId2, SE), Flows),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                sync-tstamps : TTSs,
+                sync-times : TTSs',
+                gtime : T,
+                Atts1 >
+            < CId : Counter | counter : N >,
+            eval(SE, N))
+     else shift(
+            < PId : Process |
+                nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes),
+                flows : (flow(FId2, SE), Flows),
+                Atts >
+            < SId : Simulation |
+                tokens : (token(TId, FId1, 0) Tks),
+                sync-tstamps : if TTSs[TId][NId] == undefined  ---- only if it's the 1st one
+                               then insert(TId, insert(NId, T, TTSs[TId]), TTSs)
+                               else TTSs
+                               fi,
+                sync-times : TTSs',
+                gtime : T,
+                Atts1 >
+            < CId : Counter | counter : N >)
+     fi .
+
+  op mergeGatewayInclusiveAux : Configuration Tuple{Time, Int} -> Configuration [frozen] .
+  eq mergeGatewayInclusiveAux(
+       < PId : Process |
+           nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes),
+           flows : (flow(FId2, SE), Flows),
+           Atts >
+       < SId : Simulation |
+           tokens : (token(TId, FId1, 0) Tks),
+           sync-tstamps : TTSs,
+           sync-times : TTSs',
+           gtime : T,
+           resources : Rs,
+           Atts1 >
+       < CId : Counter | counter : N >,
+       [T', N'])
+    = < PId : Process |
+          nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes),
+          flows : (flow(FId2, SE), Flows),
+          Atts >
+      < SId : Simulation |
+          tokens : add(removeTokens(TId, FIds, Tks), token(TId, FId2, T')),
+          sync-tstamps : insert(TId, insert(NId, undefined, TTSs[TId]), TTSs),
+          sync-times : insert(TId,
+                         insert(NId,
+                           if TTSs[TId][NId] == undefined
+                           then 0 ---- first and only one
+                           else T - TTSs[TId][NId]
+                           fi,
+                           TTSs[TId]),
+                         TTSs'),
+          gtime : T,
+          resources : incQueuesId(Rs, FId2, (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), T),
+          Atts1 >
+      < CId : Counter | counter : N' > .
+
+  ---- for each branch, checks if there is a token and
+  ---- if there is no token Avl, checks that we should not wait for one (backward traversal)
+  op allTokensInclusive : Id Set{Id} List{Token} Set{Node} -> Bool .
+  ---- checks if a given flow has an upstream token in the process
+  ---- strategy: we move backward and check if every encountered flow has a corresponding token
+  op expectingToken : Id Id Set{Node} List{Token} Set{Id} -> Bool .
+  --- checks if there at least one token in a set of flows
+  op expectingOneToken : Id Set{Id} Set{Node} List{Token} Set{Id} -> Bool .
+  --- checks if a given token is present in the set of messages (any FlowStamp)
+  op isToken : Id Id List{Token} -> Bool .
+  --- removes all token consumed when the inclusive merge is triggered
+  --- checks if a Id is in a set of FId
+  op isInFIds : Id Set{Id} -> Bool [memo] .
+
+  eq allTokensInclusive(TId, (FId, FIds), Tks token(TId, FId, 0) Tks', Nodes)   --- there is a token for that branch
+    = allTokensInclusive(TId, FIds, Tks Tks', Nodes) .       --- we check for the other branches
+  ceq allTokensInclusive(TId, (FId, FIds), Tks, Nodes)     --- there is no token at 0 and we do not expect one
+    = allTokensInclusive(TId, FIds, Tks, Nodes)
+    if not(expectingToken(TId, FId, Nodes, Tks, FId)) .
+  eq allTokensInclusive(TId, FIds, Tks, Nodes) = false [owise] .    --- there is no token at 0 and we expect one
+  eq allTokensInclusive(TId, empty, Tks, Nodes) = true .   --- all the branches have been treated
+
+  --- token but time > 0
+  eq expectingToken(TId, FId, Nodes, Tks token(TId, FId, T) Tks', Visited) = true  .
+  --- start event
+  eq expectingToken(TId, FId, (start(NId, FId), Nodes), Tks token(TId, NId, T) Tks', Visited)
+    = true .
+
+  --- task
+  eq expectingToken(TId, FId2, (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes), Tks, Visited)
+    = isToken(TId, NId, Tks)
+      or-else
+      (not(isInFIds(FId1, Visited))
+       and-then
+       expectingToken(TId, FId1, (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes), Tks, (FId1, Visited))) .
+  eq expectingToken(TId, FId2,
+       (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+       Tks, Visited)
+    = isToken(TId, re-enter(NId), Tks)
+      or-else
+      (isToken(TId, NId, Tks)
+        or-else
+        (not(isInFIds(FId1, Visited))
+         and-then
+         expectingToken(TId, FId1,
+           (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+           Tks, (FId1, Visited)))) .
+
+  --- split
+  --- for any split, we move to backwards search a token
+  eq expectingToken(TId, FId, (split(NId, GW, FId1, (FId, FIds)), Nodes), Tks, Visited)
+    = isToken(TId, NId, Tks)
+      or-else
+      (not(isInFIds(FId1, Visited))
+       and-then
+       expectingToken(TId, FId1, (split(NId, GW, FId1, (FId, FIds)), Nodes), Tks, (FId1, Visited))) .
+  eq expectingToken(TId, FId, (split(NId, GW, FId1, (FIdPL1 (FId, P) FIdPL2)), Nodes), Tks, Visited)
+    = not(isInFIds(FId1, Visited))
+      and-then
+      expectingToken(TId, FId1, (split(NId, GW, FId1, (FIdPL1 (FId, P) FIdPL2)), Nodes), Tks, (FId1, Visited)) .
+
+  --- merge
+  --- for any kind of merge gateway, we look for at least one token in one branch
+  eq expectingToken(TId, FId, (merge(NId, GW, FIds, FId), Nodes), Tks, Visited)
+    = expectingOneToken(TId, FIds, (merge(NId, GW, FIds, FId), Nodes), Tks, Visited) .
+  eq expectingToken(TId, FId, Nodes, Tks, Visited) = false [owise] .
+
+  --- checks is there is at least one token given a set of flows upstream to a merge
+  eq expectingOneToken(TId, empty, Nodes, Tks, Visited) = false .
+  eq expectingOneToken(TId, (FId, FIds), Nodes, Tks, Visited)
+    = not(isInFIds(FId, Visited))
+      and-then
+      (expectingToken(TId, FId, Nodes, Tks, (FId, Visited))
+       or-else
+       expectingOneToken(TId, FIds, Nodes, Tks, Visited)) .
+
+  ---- a given token is in the set of tokens ?
+  eq isToken(TId, Id, Tks token(TId, Id, T) Tks') = true .
+  eq isToken(TId, Id, Tks) = false [owise] .
+
+  --- checks if a FId is in a set of FId
+  eq isInFIds(FId, (FId, FIds)) = true .
+  eq isInFIds(FId, FIds) = false [owise] .
+
+  ------------------------------------------------------------------------------
+  ---- Split gateway - event-based
+  ---- The token is moved from the input flow to the gateway and timers (if any)
+  ---- are started.
+  rl [splitGatewayEventBased-enter] :
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, FIds), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId, 0) Tks), ---- token is at the input flow and its time is 0
+         events : ME,
+         Atts1 >
+  => < PId : Process |
+         nodes : (split(NId, eventbased, FId, FIds), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, NId, 0)), ---- the token is moved to the gate
+         events : addTimer(TId, FIds, Flows, ME),
+         Atts1 > .
+
+  crl [splitGatewayEventBased-msg] : ---- one msg flow is active
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+         flows : (flow(FId1, SE, message(MId, MD)), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks), ---- token is at gateway
+         events : ((TId |-> (msg(MId), Evs)), ME), ---- the expected message is ready
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+       nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+       flows : (flow(FId1, SE, message(MId, MD)), Flows),
+       Atts >
+     < SId : Simulation |
+       tokens : add(Tks, token(TId, FId1, T')), ---- put token in the corresponding outgoing flow
+       events : ((TId |-> removeTimer(FIds, Flows, Evs)), ME),
+       resources : incQueuesId(Rs, FId1, (split(NId, eventbased, FId, (FId1, FIds)), Nodes), T),
+       gtime : T,
+       Atts1 >
+    < CId : Counter | counter : N' >
+  if [T', N'] := eval(SE, N) .
+
+  --- adds a timer to events for the flow coming with a timer event
+  op addTimer : Id Set{Id} Set{Flow} Map{Id, Set{EventInstance}} -> Map{Id, Set{EventInstance}} .
+  --- we assume that there is exactly one flow with a timer
+  eq addTimer(TId, (FId, FIds), (flow(FId, SE, timer(Id, T)), Flows), ME)
+    = addTimer(TId, FIds, (flow(FId, SE, timer(Id, T)), Flows),
+        insert(TId, insert(tmr(Id, T), ME[TId]), ME)) .
+  eq addTimer(TId, FIds, Flows, ME) = ME [owise] . ---- no timer in any branch
+
+  ---- removes a timer if there is one active given a set of flows outgoing of an event-based split
+  op removeTimer : List{Id} Set{Flow} Set{EventInstance} -> Set{EventInstance} .
+  eq removeTimer(FId FIds, (flow(FId, SE, timer(Id, N)), Flows), (tmr(Id, T), Evs)) = Evs .
+  eq removeTimer(FIds, Flows, Evs) = Evs [owise] .
+
+  crl [splitGatewayEventBased-timer] : ---- timer 0, no active msg flow
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+         flows : (flow(FId1, SE, timer(Id, T1)), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks),
+         events : ((TId |-> (tmr(Id, 0), Evs)), ME), ---- the timer is 0
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+       nodes : (split(NId, eventbased, FId, (FId1, FIds)), Nodes),
+       flows : (flow(FId1, SE, timer(Id, T1)), Flows),
+       Atts >
+     < SId : Simulation |
+       tokens : add(Tks, token(TId, FId1, T')), ---- put token in the corresponding outgoing flow
+       events : (TId |-> Evs, ME),
+       resources : incQueuesId(Rs, FId1, (split(NId, eventbased, FId, (FId1, FIds)), Nodes), T),
+       gtime : T,
+       Atts1 >
+    < CId : Counter | counter : N' >
+  if not isActiveOneMsgFlow(FIds, Flows, Evs)
+  /\ [T', N'] := eval(SE, N) .
+
+  crl [splitGatewayEventBased-shift] : ---- no active flow, no timer 0
+     < PId : Process |
+         nodes : (split(NId, eventbased, FId, FIds), Nodes),
+         flows : Flows,
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, NId, 0) Tks),
+         events : ((TId |-> Evs), ME),
+         Atts1 >
+  => Conf':Configuration
+  if Conf := < PId : Process |
+                 nodes : (split(NId, eventbased, FId, FIds), Nodes),
+                 flows : Flows,
+                 Atts >
+             < SId : Simulation |
+                 tokens : (token(TId, NId, 0) Tks),
+                 events : ((TId |-> Evs), ME),
+                 Atts1 >
+  /\ not isActiveOneMsgFlow(FIds, Flows, Evs)
+  /\ not isZeroTimerFlow(FIds, Flows, Evs)
+  /\ Conf':Configuration := shift(Conf)
+  /\ Conf =/= Conf':Configuration .
+
+  op isEventActive : Id Set{EventInstance} -> Bool .
+  eq isEventActive(MId, (msg(MId), Evs)) = true .
+  eq isEventActive(MId, Evs) = false [owise] .
+
+  op isActiveOneMsgFlow : List{Id} Set{Flow} Set{EventInstance} -> Bool .
+  eq isActiveOneMsgFlow((FId, FIds), (flow(FId, SE, message(MId, MD)), Flows),
+       (msg(MId), Evs))
+    = true .
+  eq isActiveOneMsgFlow((FId, FIds), (flow(FId, SE, message(MId, MD), FId1), Flows),
+       (msg(MId), Evs))
+    = true .
+  eq isActiveOneMsgFlow(FIds, Flows, Evs) = false [owise] .
+
+  op isZeroTimerFlow : List{Id} Set{Flow} Set{EventInstance} -> Bool .
+  eq isZeroTimerFlow(FIds, (flow(FId1, SE, timer(Id, T1)), Flows), (tmr(MId, 0), Evs))
+    = true .
+  eq isZeroTimerFlow(FIds, Flows, Evs) = false [owise] .
+
+  ------------------------------------------------------------------------------
+  ---- Merge gateway - event-based
+
+  crl [mergeGatewayEventBased] : ---- multiple executions
+     < PId : Process |
+         nodes : (merge(NId, eventbased, (FId1, FIds), FId2), Nodes),
+         flows : (flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks),
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : (merge(NId, eventbased, (FId1, FIds), FId2), Nodes),
+         flows : (flow(FId2, SE), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId2, T')),
+         resources : incQueuesId(Rs, FId2, (merge(NId, eventbased, (FId1, FIds), FId2), Nodes), T),
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if [T', N'] := eval(SE, N) .
+
+  ------------------------------------------------------------------------------
+  ---- Event-based flow
+
+  crl [flowEventBased] : ---- msg in the flow
+     < PId : Process |
+         nodes : Nodes,
+         flows : (flow(FId1, SE1, message(MId, MD), FId2), flow(FId2, SE2), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, 0) Tks), ---- the token is in the flow
+         events : ((TId |-> (msg(MId), Evs)), ME), ---- the expected message is ready
+         resources : Rs,
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N >
+  => < PId : Process |
+         nodes : Nodes,
+         flows : (flow(FId1, SE1, message(MId, MD), FId2), flow(FId2, SE2), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : add(Tks, token(TId, FId2, T')), ---- put token in the corresponding follow up flow
+         events : (TId |-> Evs, ME),
+         resources : incQueuesId(Rs, FId2, Nodes, T),
+         gtime : T,
+         Atts1 >
+     < CId : Counter | counter : N' >
+  if [T', N'] := eval(SE2, N) .
+
+  crl [flowEventBased] : ---- no msg in the flow
+     < PId : Process |
+         flows : (flow(FId1, SE, message(MId, MD), FId2), Flows),
+         Atts >
+     < SId : Simulation |
+         tokens : (token(TId, FId1, T) Tks), ---- the token is in the flow
+         events : (TId |-> Evs, ME),
+         Atts1 >
+  => Conf':Configuration
+  if not isActiveOneMsgFlow(FId1, flow(FId1, SE, message(MId, MD), FId2), Evs)
+  /\ Conf := < PId : Process |
+                 flows : (flow(FId1, SE, message(MId, MD), FId2), Flows),
+                 Atts >
+             < SId : Simulation |
+                 tokens : (token(TId, FId1, T) Tks), ---- the token is in the flow
+                 events : (TId |-> Evs, ME),
+                 Atts1 >
+  /\ Conf':Configuration := shift(Conf)
+  /\ Conf =/= Conf':Configuration .
+
+  ------------------------------------------------------------------------------
+  ---- shift
+  ---- When the token at the front of the scheduler is on a non-active constructor,
+  ---- the shift operation is invoked on the entire system configuration. It
+  ---- checks, in order, the tokens in the scheduler for the first active token.
+  ---- The located token is then moved to the front of the scheduler.
+  ---- Notice that:
+  ---- - the FIFO order may be not respected
+  ---- - other possibly more-efficient strategies could be implemented, e.g.,
+  ----   moving backward tokens in branches for an incomplete merge, or task
+  ----   with no resource, but the global impacto on the order of token would
+  ----   be much greater
+  ---- - other possibly less-impacting strategies could also be implemented,
+  ----   trying to minimize the number of movements in the scheduler, but that
+  ----   would require more computation
+  ---- - since the scheduler keeps tokens for all simulations under execution,
+  ----   the shifting of token may affect tokens in different executions, which
+  ----   is key, since a task in an execution may be waiting for a resource used
+  ----   in another one
+  ---- - although experiments seems to show it, it would be nice to formally
+  ----   prove that the simulations are block free
+
+  ---- shift(Conf) puts at the front of the scheduler a token in an active node on a different execution
+  op shift : Configuration -> Configuration .
+  op shiftAux : Configuration List{Token} List{Token} -> Configuration .
+
+  ---- if shift is invoked, we may assume the token at the front is not active
+  eq shift(< SId : Simulation | tokens : (Tk Tks), Atts1 > Conf)
+    = shiftAux(< SId : Simulation | tokens : (Tk Tks), Atts1 > Conf, Tk, Tks) .
+  eq shiftAux(
+        < PId : Process |
+            nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+            Atts >
+        < SId : Simulation | tokens : Tks, resources : Rs, Atts1 >
+        Conf,
+        Tks', ---- non-active tokens
+        token(TId, FId1, T) Tks'')
+    = if allResourcesAvailable(RIds, Rs)
+      then < PId : Process |
+               nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+               Atts >
+           < SId : Simulation |
+               tokens : (token(TId, FId1, T) Tks' Tks''), ---- it's moved to the front
+               resources : Rs,
+               Atts1 >
+           Conf
+      else shiftAux(
+             < PId : Process |
+                 nodes : (task(NId, TaskName, FId1, FId2, SE, RIds, SEI), Nodes),
+                 Atts >
+             < SId : Simulation | tokens : Tks, resources : Rs, Atts1 >
+             Conf,
+             Tks' token(TId, FId1, T),
+             Tks'')
+      fi .
+  eq shiftAux(
+        < PId : Process |
+            nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+            Atts >
+        < SId : Simulation | tokens : Tks, resources : Rs, Atts1 >
+        Conf,
+        Tks', ---- non-active tokens
+        token(TId, FId1, T) Tks'')
+    = if allResourcesAvailable(RIds, Rs)
+      then < PId : Process |
+               nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+               Atts >
+           < SId : Simulation |
+               tokens : (token(TId, FId1, T) Tks' Tks''), ---- it's moved to the front
+               resources : Rs,
+               Atts1 >
+           Conf
+      else shiftAux(
+             < PId : Process |
+                 nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, SEII), Nodes),
+                 Atts >
+             < SId : Simulation | tokens : Tks, resources : Rs, Atts1 >
+             Conf,
+             Tks' token(TId, FId1, T),
+             Tks'')
+      fi .
+  eq shiftAux(
+        < PId : Process |
+            nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes),
+            Atts >
+        < SId : Simulation | tokens : Tks, events : ((TId |-> Evs), ME), Atts1 >
+        Conf,
+        Tks', ---- non-active tokens
+        token(TId, re-enter(NId), T) Tks'')
+    = if isEventActive(MId, Evs)
+      then < PId : Process |
+               nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes),
+               Atts >
+           < SId : Simulation |
+               tokens : (token(TId, re-enter(NId), T) Tks' Tks''), ---- it's moved to the front
+               events : ((TId |-> Evs), ME),
+               Atts1 >
+           Conf
+      else shiftAux(
+             < PId : Process |
+                 nodes : (task2(NId, TaskName, FId1, FId2, SE, RIds, SEIO, MId), Nodes),
+                 Atts >
+             < SId : Simulation | tokens : Tks, events : ((TId |-> Evs), ME), Atts1 >
+             Conf,
+             Tks' token(TId, re-enter(NId), T),
+             Tks'')
+      fi .
+  eq shiftAux(
+       < PId : Process | nodes : (merge(NId, parallel, (FId1, FIds), FId2), Nodes), Atts >
+       < SId : Simulation | tokens : Tks, sync-tstamps : TTSs, Atts1 >
+       Conf,
+       Tks',
+       token(TId, FId1, T) Tks'')
+    = if TTSs[TId][NId] == undefined
+         or
+         allTokensParallel(TId, (FId1, FIds), (Tks' token(TId, FId1, T) Tks''))
+      then < PId : Process | nodes : (merge(NId, parallel, (FId1, FIds), FId2), Nodes), Atts >
+           < SId : Simulation | tokens : (token(TId, FId1, T) Tks' Tks''), sync-tstamps : TTSs, Atts1 >
+           Conf
+      else shiftAux(
+             < PId : Process | nodes : (merge(NId, parallel, (FId1, FIds), FId2), Nodes), Atts >
+             < SId : Simulation | tokens : Tks, sync-tstamps : TTSs, Atts1 >
+             Conf,
+             Tks' token(TId, FId1, T),
+             Tks'')
+      fi .
+  eq shiftAux(
+       < PId : Process | nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), Atts >
+       < SId : Simulation | tokens : Tks, sync-tstamps : TTSs, Atts1 >
+       Conf,
+       Tks',
+       token(TId, FId1, T) Tks'')
+    = if TTSs[TId][NId] == undefined
+         or
+         allTokensInclusive(TId, (FId1, FIds), (Tks' token(TId, FId1, T) Tks''), (merge(NId, inclusive, (FId1, FIds), FId2), Nodes))
+      then < PId : Process | nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), Atts >
+           < SId : Simulation | tokens : (token(TId, FId1, T) Tks' Tks''), sync-tstamps : TTSs, Atts1 >
+           Conf
+      else shiftAux(
+             < PId : Process | nodes : (merge(NId, inclusive, (FId1, FIds), FId2), Nodes), Atts >
+             < SId : Simulation | tokens : Tks, sync-tstamps : TTSs, Atts1 >
+             Conf,
+             Tks' token(TId, FId1, T),
+             Tks'')
+      fi .
+  eq shiftAux(
+       < PId : Process | nodes : (split(NId, eventbased, FId, FIds), Nodes), flows : Flows, Atts >
+       < SId : Simulation | tokens : Tks, events : ((TId |-> Evs), ME), Atts1 >
+       Conf,
+       Tks',
+       token(TId, NId, T) Tks'')
+    = if isActiveOneMsgFlow(FIds, Flows, Evs)
+         or
+         isZeroTimerFlow(FIds, Flows, Evs)
+      then < PId : Process | nodes : (split(NId, eventbased, FId, FIds), Nodes), flows : Flows, Atts >
+           < SId : Simulation | tokens : (token(TId, NId, T) Tks' Tks''), events : ((TId |-> Evs), ME), Atts1 >
+           Conf
+      else shiftAux(
+             < PId : Process | nodes : (split(NId, eventbased, FId, FIds), Nodes), flows : Flows, Atts >
+             < SId : Simulation | tokens : Tks, events : ((TId |-> Evs), ME), Atts1 >
+             Conf,
+             Tks' token(TId, NId, T),
+             Tks'')
+      fi .
+ eq shiftAux(
+      < PId : Process | flows : (flow(FId1, SE, message(MId, MD), FId2), Flows), Atts >
+      < SId : Simulation |
+          tokens : Tks,
+          events : ((TId |-> Evs), ME),
+          Atts1 >
+      Conf,
+      Tks',
+      token(TId, FId1, T) Tks'')
+   = if ---- the expected message is ready
+        isActiveOneMsgFlow(FId1, flow(FId1, SE, message(MId, MD), FId2), Evs)
+     then < PId : Process | flows : (flow(FId1, SE, message(MId, MD), FId2), Flows), Atts >
+          < SId : Simulation |
+              tokens : (token(TId, FId1, T) Tks' Tks''),
+              events : ((TId |-> Evs), ME),
+              Atts1 >
+          Conf
+     else shiftAux(
+            < PId : Process | flows : (flow(FId1, SE, message(MId, MD), FId2), Flows), Atts >
+            < SId : Simulation |
+                tokens : Tks,
+                events : ((TId |-> Evs), ME),
+                Atts1 >
+            Conf,
+            Tks' token(TId, FId1, T),
+            Tks'')
+     fi .
+  eq shiftAux(
+       < SId : Simulation | tokens : Tks, Atts >
+       Conf,
+       Tks',
+       token(TId, Id, T) Tks'')
+    = < SId : Simulation | tokens : (token(TId, Id, T) Tks' Tks''), Atts >
+      Conf
+    [owise] .
+  eq shiftAux(< SId : Simulation | tokens : Tks, Atts > Conf, Tks', nil)
+    = < SId : Simulation | tokens : Tks', Atts > Conf .
+endm
+
+view System from TRIV to BPMN-SEM is
+  sort Elt to System .
+endv
