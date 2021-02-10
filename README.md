@@ -19,7 +19,7 @@ predicted behavior, and by a combination of available strategies.
 
 Such analysis is performed on models conforming to an extension of BPMN with
 quantitative information, including resource availability and constraints.
-Within this framework, the approach is fully mechanized using a formal and
+Within this framework, the approach is fully mechanized using a formal and 
 executable specification in the rewriting logic framework, which relies on
 existing techniques and tools for simulating probabilistic and real-time
 specifications.
