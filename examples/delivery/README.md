@@ -29,8 +29,7 @@ runs$ maude bpmn-run-delivery-usage-10-25-1-0-5-2-70-80-60-1-0-4-2-70-80-50-1-0-
 It will end up showing the resulting term with all the information of the simulation.
 Find a summary of the results for these experiments in the [summary file](./runs/summary.txt).
 
-<!-- embedded in text
-![delivery process with legend and probabilities](../figs/delivery-legend-probs.png "delivery process with legend and probabilities")
+![delivery process with legend and probabilities](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-legend-probs.png "delivery process with legend and probabilities")
 
 <!-- referente to a file
 [delivery process with legend and probabilities](../figs/delivery-legend-probs.png "")
