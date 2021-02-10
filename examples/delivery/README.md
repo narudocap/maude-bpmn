@@ -45,6 +45,10 @@ courier = [[1, 4], 3, [60, 90], 40],
 car = [[1, 0], 2, [60, 90], 20],
 drone = [[1, 4], 3, [60, 90], 30]
 
+available instances        |  usage
+:-------------------------:|:-------------------------:
+![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type1.png)  |  ![](https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type2.png)
+
 <img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type1.png" alt="delivery cars available instances" width="100" height="100">
 <img src="https://github.com/narudocap/maude-bpmn/blob/main/examples/delivery/figs/delivery-predictive-usage-5-5-10-1000-1-0-5-1-60-90--1--1-60-1-0-4-1-60-90--1--1-50-1-4-3-1-60-90--1--1-40-1-0-2-1-60-90--1--1-20-1-4-3-1-60-90--1--1-30-car-type2.png" alt="delivery cars usage" width="100" height="100">
 
