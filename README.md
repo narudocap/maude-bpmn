@@ -1,4 +1,4 @@
-# Maude-based analaysis of BPMN processes
+# Maude-based analysis of BPMN processes
 
 This repository contains information, code and examples related to the Maude specification of BPMN processes.
 
