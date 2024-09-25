@@ -22,7 +22,8 @@ mod BPMN-EX is
         flow(id("f009"), Norm(1.0, 0.2), message(id("order confirmed"), "order confirmed")),
         flow(id("f010"), Norm(1.0, 0.2), message(id("order canceled"), "order canceled")),
         flow(id("f011"), Norm(1.0, 0.2), timer(id("timeout"), 60)),
-        flow(id("f012"), Norm(1.0, 0.2), message(id("parcel delivered"), "parcel delivered")),
+        flow(id("f012"), Norm(1.0, 0.2), message(id("parcel delivered"), "parcel delivered"), id("f012-2")),
+        flow(id("f012-2"), Norm(1.0, 0.2)),
         flow(id("f013"), Norm(1.0, 0.2)),
         flow(id("f014"), Norm(1.0, 0.2)),
         flow(id("f015"), Norm(1.0, 0.2)),
@@ -57,7 +58,7 @@ mod BPMN-EX is
 
         split(id("n008"), eventbased, id("f008"), (id("f009"), id("f010"), id("f011"))),
         merge(id("n010"), eventbased, (id("f010"), id("f011")), id("f013")),
-        merge(id("n012"), eventbased, (id("f012"), id("f014")), id("f015")),
+        merge(id("n012"), eventbased, (id("f012-2"), id("f014")), id("f015")),
 
         split(id("n017"), exclusive, id("f017"),((id("f018"), 0.1) (id("f019"), 0.9))),
         split(id("n021"), parallel, id("f021"), (id("f022"), id("f023"))),
